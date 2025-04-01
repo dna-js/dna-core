@@ -1,0 +1,49 @@
+# Node modules
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependency directories
+lerna-debug.log
+lerna-debug.log*
+
+# Build directories
+dist/
+build/
+
+# TypeScript
+*.tsbuildinfo
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# Mac system files
+.DS_Store
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# IDE directories
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+temp/
+
+# Lerna
+lerna-debug.log
+lerna-debug.log*
+
+.VSCodeCounter
