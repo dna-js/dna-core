@@ -1,18 +1,20 @@
 {
-  "name": "@dna-core/var-space",
+  "name": "var-space",
   "version": "0.0.1",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "readme.md"
   ],
   "scripts": {
     "build": "rollup -c",
     "dev": "webpack serve --mode development",
     "test": "jest",
     "clean": "rimraf dist",
-    "lint": "eslint src --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts,.tsx",
+    "pub": "npm publish --access=public --registry https://registry.npmjs.org/"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^11.1.6",

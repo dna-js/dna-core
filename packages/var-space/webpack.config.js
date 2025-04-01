@@ -22,7 +22,7 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
-      template: 'public/index.html' // Assuming you have an index.html in the public folder
+      template: 'public/index.html'
     })
   ],
   devServer: {
