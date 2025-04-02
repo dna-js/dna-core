@@ -19,16 +19,16 @@ export const strictConversionRules: Map<NativeType, Map<NativeType, ConversionFn
 
 /**
  * config a conversion rule
- * - when assign as `originType = valueType`, the fn will be called to convert and check
- * @param originType 
- * @param valueType 
+ * - when assign as `toType = fromType`, the fn will be called to convert and check
+ * @param toType 
+ * @param fromType 
  * @param fn 
  */
-function configRule(originType: NativeType, valueType: NativeType, fn: ConversionFn) {
-  if (!strictConversionRules.has(originType)) {
-    strictConversionRules.set(originType, new Map());
+function configRule(toType: NativeType, fromType: NativeType, fn: ConversionFn) {
+  if (!strictConversionRules.has(toType)) {
+    strictConversionRules.set(toType, new Map());
   }
-  strictConversionRules.get(originType)!.set(valueType, fn);
+  strictConversionRules.get(toType)!.set(fromType, fn);
 }
 
 // --- Populate Rules (based on the image's strict mode) ---
@@ -43,11 +43,11 @@ configRule('String', 'Date', (value) => ({ success: true, convertedValue: (value
 configRule('Number', 'String', (value, key, targetType) => {
   const strValue = String(value).trim();
   if (strValue === '') {
-     return { success: false, error: `[Strict Mode] 属性 ${key} (${targetType}) 不接受空字符串` };
+     return { success: false, error: `[Strict Mode] Property ${key} (${targetType}) does not accept empty string` };
   }
   const numValue = Number(strValue);
   if (isNaN(numValue)) {
-    return { success: false, error: `[Strict Mode] 属性 ${key} (${targetType}) 无法将字符串 "${value}" 转换为有效数字` };
+    return { success: false, error: `[Strict Mode] Property ${key} (${targetType}) cannot convert string "${value}" to a valid number` };
   }
   return { success: true, convertedValue: numValue };
 });
@@ -61,7 +61,7 @@ configRule('Boolean', 'String', (value, key, targetType) => {
   const lower = String(value).trim().toLowerCase();
   if (lower === 'true') return { success: true, convertedValue: true };
   if (lower === 'false') return { success: true, convertedValue: false };
-  return { success: false, error: `[Strict Mode] 属性 ${key} (${targetType}) 无法将字符串 "${value}" 转换为布尔值 (只接受 'true' 或 'false')` };
+  return { success: false, error: `[Strict Mode] Property ${key} (${targetType}) cannot convert string "${value}" to boolean (only accepts 'true' or 'false')` };
 });
 // Other types (Date, Object, Array) are implicitly disallowed for Boolean target
 
@@ -69,18 +69,18 @@ configRule('Boolean', 'String', (value, key, targetType) => {
 configRule('Date', 'Number', (value, key, targetType) => {
     const dateValue = new Date(value);
     if (isNaN(dateValue.getTime())) {
-        return { success: false, error: `[Strict Mode] 属性 ${key} (${targetType}) 无法将数字 ${value} 转换为有效日期` };
+        return { success: false, error: `[Strict Mode] Property ${key} (${targetType}) cannot convert number ${value} to a valid date` };
     }
     return { success: true, convertedValue: dateValue };
 });
 configRule('Date', 'String', (value, key, targetType) => {
     const strValue = String(value).trim();
     if (strValue === '') {
-         return { success: false, error: `[Strict Mode] 属性 ${key} (${targetType}) 不接受空字符串` };
+         return { success: false, error: `[Strict Mode] Property ${key} (${targetType}) does not accept empty string` };
     }
     const dateValue = new Date(strValue);
     if (isNaN(dateValue.getTime())) {
-         return { success: false, error: `[Strict Mode] 属性 ${key} (${targetType}) 无法将字符串 "${value}" 转换为有效日期` };
+         return { success: false, error: `[Strict Mode] Property ${key} (${targetType}) cannot convert string "${value}" to a valid date` };
     }
     return { success: true, convertedValue: dateValue };
 });

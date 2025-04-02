@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Var-Space toString Examples</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 90vw;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .examples-container {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            overflow-x: auto;
+            padding: 20px 0;
+            scrollbar-width: thin;
+            scrollbar-color: #888 #f5f5f5;
+        }
+
+        .examples-container::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .examples-container::-webkit-scrollbar-track {
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .examples-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .example-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 400px;
+            flex: 0 0 auto;
+        }
+
+        .example-card h3 {
+            color: #2c3e50;
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .example-card h4 {
+            color: #34495e;
+            margin: 15px 0 10px;
+        }
+
+        .code-snippet {
+            margin-bottom: 20px;
+        }
+
+        .code-snippet pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .code-snippet code {
+            display: block;
+            white-space: pre;
+        }
+
+        .value-display pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+
+        .toString-result {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 4px;
+            border-left: 4px solid #4caf50;
+        }
+
+        .color-preview {
+            margin-top: 15px;
+            height: 50px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .description {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto 40px;
+            color: #666;
+        }
+
+        /* Syntax highlighting colors */
+        .code-snippet .keyword { color: #569cd6; }
+        .code-snippet .string { color: #ce9178; }
+        .code-snippet .function { color: #dcdcaa; }
+        .code-snippet .number { color: #b5cea8; }
+        .code-snippet .comment { color: #6a9955; }
+
+        @media (max-width: 1200px) {
+            .examples-container {
+                flex-wrap: wrap;
+            }
+            .example-card {
+                flex: 1 1 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Var-Space toString Examples</h1>
+        <div class="description">
+            <p>This example demonstrates the custom toString functionality in the var-space package. 
+               Each card shows a different custom type with its toString implementation and the resulting string representation.</p>
+        </div>
+        <div id="examples-container" class="examples-container">
+            <!-- Examples will be dynamically inserted here -->
+        </div>
+    </div>
+</body>
+</html> 

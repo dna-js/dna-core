@@ -6,6 +6,7 @@ A monorepo containing multiple packages for building modern web applications.
 
 - `@dna-core/math`: A simple math library with basic arithmetic operations
 - `@dna-core/react-app`: A React application that demonstrates the usage of the math library
+- `@dna-core/var-space`: A type system and variable management library with custom type support
 
 ## Getting Started
 
@@ -61,11 +62,43 @@ yarn test
 ```
 dna-core/
 ├── packages/
-│   ├── math/           # Math library package
-│   └── react-app/      # React application package
+│   └── var-space/      # Type system and variable management package
 ├── package.json        # Root package.json
 └── lerna.json         # Lerna configuration
 ```
+
+## Features
+
+### Var-Space Package
+
+The var-space package provides a flexible type system with the following features:
+
+- Custom type definitions with TypeScript support
+- Variable descriptors with metadata
+- Type conversion rules
+- Custom toString functionality for type values
+
+#### Custom Type Definition Example
+
+```typescript
+import { defineCustomType } from '@dna-core/var-space';
+
+// Define a custom type with a custom toString function
+defineCustomType({
+  type: "User",
+  defaultValue: {
+    id: "",
+    name: "",
+    age: 0
+  },
+  descriptor: {
+    type: "Object",
+    toString: (value) => `${value.name} (${value.age})`
+  }
+});
+```
+
+The toString function in the descriptor allows you to customize how a type's value is converted to a string. If not provided, it will use JavaScript's default toString behavior.
 
 ## Development Workflow
 

@@ -10,3 +10,14 @@ export {
 export type {
   VarDesc
 }
+
+export {
+  defineCustomType,
+  getCustomType,
+  isCustomType,
+  getCustomTypes
+} from './custom.type.api';
+
+export type {
+  CustomTypeDefinition
+} from './custom.type.api';

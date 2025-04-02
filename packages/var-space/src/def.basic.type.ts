@@ -45,6 +45,12 @@ export type VarDesc = {
    * Additional description information
    */
   info?: string
+
+  /**
+   * Custom toString function for the type
+   * - If not provided, will use JavaScript's default toString behavior
+   */
+  toString?: (value: any) => string
 }
 
 /**
@@ -78,6 +84,7 @@ export function getDefaultDescriptor(type: NativeType): VarDesc {
     observable: false,
     configurable: true,
     label: '',
+    toString: (value: any) => String(value)
   }
 }
 
