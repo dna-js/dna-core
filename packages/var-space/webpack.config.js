@@ -5,6 +5,7 @@ module.exports = {
   entry: {
     main: './src/index.ts',
     toStringExample: './examples/toString-example.ts',
+    varSpaceExample: './examples/varSpace-example.ts',
     index: './examples/index.ts'
   },
   mode: 'development',
@@ -34,6 +35,11 @@ module.exports = {
       template: 'examples/toString-example.html',
       filename: 'toString-example.html',
       chunks: ['toStringExample']
+    }),
+    new HtmlWebpackPlugin({
+      template: 'examples/varSpace-example.html',
+      filename: 'varSpace-example.html',
+      chunks: ['varSpaceExample']
     })
   ],
   devServer: {

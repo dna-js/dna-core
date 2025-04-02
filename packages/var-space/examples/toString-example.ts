@@ -1,85 +1,61 @@
-import { defineCustomType, getCustomType } from '../src/custom.type.api';
+import { defineVarType, getVarType } from '../src';
 
 // Define a User type with custom toString
-defineCustomType({
-  type: "User",
+defineVarType("User", {
   defaultValue: {
     id: "",
     name: "",
     age: 0,
     email: ""
   },
-  descriptor: {
-    type: "Object",
-    toString: (value) => `${value.name} (${value.age})`
-  }
+  toString: (value) => `${value.name} (${value.age})`
 });
 
 // Define a Color type with custom toString
-defineCustomType({
-  type: "Color",
+defineVarType("Color", {
   defaultValue: {
     r: 0,
     g: 0,
     b: 0
   },
-  descriptor: {
-    type: "Object",
-    toString: (value) => `rgb(${value.r}, ${value.g}, ${value.b})`
-  }
+  toString: (value) => `rgb(${value.r}, ${value.g}, ${value.b})`
 });
 
 // Define a DateRange type with custom toString
-defineCustomType({
-  type: "DateRange",
+defineVarType("DateRange", {
   defaultValue: {
     start: new Date(),
     end: new Date()
   },
-  descriptor: {
-    type: "Object",
-    toString: (value) => `${value.start.toLocaleDateString()} - ${value.end.toLocaleDateString()}`
-  }
+  toString: (value) => `${value.start.toLocaleDateString()} - ${value.end.toLocaleDateString()}`
 });
 
 // Code snippets for display
 const codeSnippets = {
-  user: `defineCustomType({
-  type: "User",
-  defaultValue: {
-    id: "",
-    name: "",
-    age: 0,
-    email: ""
-  },
-  descriptor: {
-    type: "Object",
+  user: `defineVarType("User", {
+    defaultValue: {
+      id: "",
+      name: "",
+      age: 0,
+      email: ""
+    },
     toString: (value) => \`\${value.name} (\${value.age})\`
-  }
-});`,
-  color: `defineCustomType({
-  type: "Color",
-  defaultValue: {
-    r: 0,
-    g: 0,
-    b: 0
-  },
-  descriptor: {
-    type: "Object",
+  });`,
+  color: `defineVarType("Color", {
+    defaultValue: {
+      r: 0,
+      g: 0,
+      b: 0
+    },
     toString: (value) => \`rgb(\${value.r}, \${value.g}, \${value.b})\`
-  }
-});`,
-  dateRange: `defineCustomType({
-  type: "DateRange",
-  defaultValue: {
-    start: new Date(),
-    end: new Date()
-  },
-  descriptor: {
-    type: "Object",
+  });`,
+  dateRange: `defineVarType("DateRange", {
+    defaultValue: {
+      start: new Date(),
+      end: new Date()
+    },
     toString: (value) => \`\${value.start.toLocaleDateString()} - \${value.end.toLocaleDateString()}\`
-  }
-});`
+  });`
 };
 
 // Function to create and display examples
@@ -94,8 +70,8 @@ function createExamples() {
     age: 30,
     email: "john@example.com"
   };
-  const userType = getCustomType("User");
-  const userToString = userType?.descriptor?.toString?.(user) || String(user);
+  const userType = getVarType("User");
+  const userToString = userType?.toString?.(user) || String(user);
   
   container.innerHTML += `
     <div class="example-card">
@@ -120,8 +96,8 @@ function createExamples() {
     g: 128,
     b: 0
   };
-  const colorType = getCustomType("Color");
-  const colorToString = colorType?.descriptor?.toString?.(color) || String(color);
+  const colorType = getVarType("Color");
+  const colorToString = colorType?.toString?.(color) || String(color);
   
   container.innerHTML += `
     <div class="example-card">
@@ -146,8 +122,8 @@ function createExamples() {
     start: new Date('2024-01-01'),
     end: new Date('2024-12-31')
   };
-  const dateRangeType = getCustomType("DateRange");
-  const dateRangeToString = dateRangeType?.descriptor?.toString?.(dateRange) || String(dateRange);
+  const dateRangeType = getVarType("DateRange");
+  const dateRangeToString = dateRangeType?.toString?.(dateRange) || String(dateRange);
   
   container.innerHTML += `
     <div class="example-card">

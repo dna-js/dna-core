@@ -7,10 +7,13 @@
   ],
   "scripts": {
     "build": "lerna run build",
+    "pub": "lerna run pub",
     "test": "lerna run test",
     "dev": "lerna run dev --parallel",
     "clean": "lerna run clean",
-    "lint": "lerna run lint"
+    "lint": "lerna run lint",
+    "var-space": "lerna run --scope var-space dev",
+    "var-space:build": "lerna run --scope var-space build"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

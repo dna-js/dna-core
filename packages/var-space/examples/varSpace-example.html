@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VarSpace Example</title>
+    <style>
+        body { font-family: sans-serif; padding: 1em; }
+        pre { background-color: #f4f4f4; padding: 1em; border-radius: 4px; }
+        code { font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>VarSpace Basic Example</h1>
+    <p>This example demonstrates creating a VarSpace, defining its structure, setting data, and interacting with it using MobX reactivity. Changes in inputs for writable fields will update the VarSpace, and the tree will re-render automatically.</p>
+
+    <div>
+      <label>
+        <input type="checkbox" id="observable-toggle" checked> <!-- Default to observable -->
+        Make VarSpace Globally Observable (recreates VarSpace on change)
+      </label>
+    </div>
+    <hr>
+    
+    <!-- Container for the reactive tree view -->
+    <div id="tree-view-container">
+        <h2>VarSpace Tree:</h2>
+        <div id="tree-view">Loading...</div>
+    </div>
+
+    <!-- Add a script tag to load the compiled JS -->
+    <!-- Assumes your build process compiles varSpace-example.ts to ./varSpace-example.js -->
+    <script type="module" src="./varSpace-example.js"></script>
+
+</body>
+</html>
