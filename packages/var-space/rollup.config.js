@@ -20,13 +20,13 @@ module.exports = {
     },
   ],
   plugins: [
+    typescript({
+      tsconfig: './tsconfig.json',
+    }),
     esbuild.default({
       target: 'es2018',
       minify: isProduction,
       sourcemap: true,
-    }),
-    typescript({
-      tsconfig: './tsconfig.json',
     }),
   ],
 }; 

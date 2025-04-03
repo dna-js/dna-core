@@ -45,9 +45,9 @@ const PROXY_HANDLER = {
       case 'scope':
       case 'alias':
       case '$data':
+      case "$label":
       case 'build$data':
       case 'getStruct':
-      case 'getWrappedData':
       case 'getVarNode':
       // ObjectNode (and inherited) properties/methods
       case 'getChildNode':
@@ -62,6 +62,7 @@ const PROXY_HANDLER = {
       case 'leaf':
       case 'varDescriptor':
       case 'getData':
+      case 'getSymbolData':
       case '$backgroundData':
         return target[key];
       default:
@@ -93,6 +94,7 @@ const PROXY_HANDLER = {
       case 'key':
       case 'scope':
       case 'alias':
+      case "$label":
         target[key] = value
         return true
 
@@ -106,7 +108,7 @@ const PROXY_HANDLER = {
       case 'getVarNode':
       case 'getData':
       case 'build$data':
-      case 'getWrappedData':
+      case 'getSymbolData':
         console.warn(`System method ${key} cannot be modified`)
         return false
     }
