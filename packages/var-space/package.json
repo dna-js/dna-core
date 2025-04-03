@@ -1,9 +1,10 @@
 {
   "name": "var-space",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
+  "git": "https://github.com/dna-js/dna-core",
   "files": [
     "dist",
     "readme.md"

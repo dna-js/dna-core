@@ -36,7 +36,7 @@ function createAndRenderVarSpace(isObservable: boolean) {
     }
 
     // 1. Create a VarSpace instance with the desired observable setting
-    const myVarSpace = (window as any).myVarSpace = new VarSpace({
+    const myVarSpace = (window as any).$myVarSpace = new VarSpace({
         key: '$appData',
         label: 'Application Data',
         observable: isObservable // Use the parameter here
@@ -46,8 +46,8 @@ function createAndRenderVarSpace(isObservable: boolean) {
     // 2. Define the structure using $appendLeaf and $appendNest
     log('Defining structure...');
     myVarSpace.$appendLeaf('pageTitle', { nativeType: 'String', label: 'Page Title', value: 'Default Title' });
-    myVarSpace.$appendLeaf('counter', { nativeType: 'Number', label: 'Click Counter', value: 0 });
-    myVarSpace.$appendLeaf('lastUpdate', { nativeType: 'DateTime', label: 'Last Update Time' }); // No initial value
+    myVarSpace.$appendLeaf('counter', { nativeType: 'Number', label: '点击次数', value: 0 });
+    myVarSpace.$appendLeaf('lastUpdate', { nativeType: 'DateTime', label: '最后更新时间' }); // No initial value
     myVarSpace.$appendLeaf('readOnlyInfo', { nativeType: 'String', label: 'Read Only Info', value: 'Cannot change me', writable: false });
 
     // Add a nested object for user settings
@@ -78,7 +78,7 @@ function createAndRenderVarSpace(isObservable: boolean) {
 
     function renderVarSpaceTree(vs: VarSpace, container: HTMLElement) {
         log("Rendering tree...");
-        const rootStruct = vs.getStruct(); // Get structure
+        const rootStruct = vs.getVsStruct(); // Get structure
         const data = vs.$data; // Get the reactive data
 
         container.innerHTML = ''; // Clear previous tree
@@ -110,7 +110,7 @@ function createAndRenderVarSpace(isObservable: boolean) {
                 const value = currentData?.[itemStruct.key];
                 content += `: ${JSON.stringify(value)}`; // Display current value (using stringify for clarity)
 
-                if (itemStruct.writeable) {
+                if (itemStruct.writable) {
                     const input = document.createElement('input');
                     input.type = (itemStruct.type === 'Number') ? 'number' :
                                 (itemStruct.type === 'Boolean') ? 'checkbox' :

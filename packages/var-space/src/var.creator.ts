@@ -53,13 +53,13 @@ const PROXY_HANDLER = {
       case 'getChildNode':
       case 'getChildInfo':  
       case '$setData':
-      case 'getStructX':
+      case 'getVsStruct':
       case '$appendLeaf':
       case '$appendNest':
       case '$deleteVar':
       case '$hasVar':
       case '$varNodes':
-      case '$isXObj':
+      case 'leaf':
       case 'varDescriptor':
       case 'getData':
       case '$backgroundData':
@@ -100,7 +100,7 @@ const PROXY_HANDLER = {
       case '$appendNest':
       case '$deleteVar':
       case 'getStruct':
-      case 'getStructX':
+      case 'getVsStruct':
       case '$setData':
       case '$hasVar':
       case 'getVarNode':
@@ -252,9 +252,8 @@ const PROXY_HANDLER = {
            }
        }
     } else {
-        // Assign final (potentially converted) value to leaf node (VarItemInstance)
-        if (node.value !== finalValue) { // Avoid unnecessary updates
-            node.value = finalValue;
+        if (node.value !== finalValue) { 
+          node.value = finalValue;
         }
     }
 
@@ -276,13 +275,14 @@ export type IVarStruct = {
   /**
    * Writable
    */
-  writeable: boolean;
+  writable: boolean;
   /**
    * Enumerable
    */
   enumerable: boolean;
 
   children?: IVarStruct[];
+  leaf?: boolean;
 }
 
 // ==============================Above is the underlying capability of variables===================================
@@ -310,7 +310,7 @@ type IVarMetaProps = {
  * An object node
  */
 export class ObjectNode {
-  $isXObj: boolean = true;
+  leaf: boolean = false;
 
   /**
    * key -> [varInstance, info]
@@ -573,22 +573,24 @@ export class ObjectNode {
    * - Used for visualizing the structure in low-code/no-code environments.
    * @returns Tree data of the variable structure.
    */
-  getStructX(): IVarStruct[] {
+  getStruct(): IVarStruct[] {
     const result: IVarStruct[] = [];
     
     this.$varNodes.forEach((node, key) => {
+      const varObject = node[0];
       // Create basic structure
       const _struct: IVarStruct = {
         key,
         label: node[1].label || key,
-        type: node[0].varDescriptor.nativeType,
-        writeable: node[0].varDescriptor.writable !== false,
-        enumerable: node[0].varDescriptor.enumerable !== false
+        type: varObject.varDescriptor.nativeType,
+        writable: varObject.varDescriptor.writable !== false,
+        enumerable: varObject.varDescriptor.enumerable !== false,
+        leaf: varObject instanceof ObjectNode ? false : true
       };
       
       // If it's an object node, recursively get the child structure
-      if (node[0] instanceof ObjectNode) {
-        _struct.children = (node[0] as ObjectNode).getStructX();
+      if (varObject instanceof ObjectNode) {
+        _struct.children = (varObject as ObjectNode).getStruct();
       }
       
       result.push(_struct);
@@ -644,12 +646,6 @@ export class VarSpace extends ObjectNode {
    * The scope in which the variable space is effective.
    */
   scope: vsLevel
-
-  /**
-   * Upstream object
-   * - Weak reference implemented using WeakRef
-   */
-  $referrer: any;
 
   /**
    * Alias (must start with $)
@@ -777,7 +773,7 @@ export class VarSpace extends ObjectNode {
       return {
         type: 'Object',
         varDescriptor: { ...current.varDescriptor },
-        children: current.getStructX()
+        children: current.getStruct()
       }
     } else {
       return {
@@ -789,33 +785,29 @@ export class VarSpace extends ObjectNode {
   }
 
   /**
-   * var space includes itself.
-   * @returns 
+   * Gets the definition structure of the variable space.
+   * - Used for visualizing the structure in low-code/no-code environments.
+   * @returns An array containing the tree data structure of this variable space.
    */
-  getStruct(): IVarStruct {
-    return {
+  getVsStruct(): IVarStruct {
+    const selfStruct: IVarStruct = {
       key: this.key,
       label: this.$label || this.key,
-      type: 'Object',
-      writeable: this.varDescriptor.writable ?? true,
-      enumerable: this.varDescriptor.enumerable ?? true,
-      children: super.getStructX()
-    } 
+      type: 'Object', // VarSpace is always an Object type
+      writable: this.varDescriptor.writable !== false, 
+      enumerable: this.varDescriptor.enumerable !== false,
+      leaf: false, // VarSpace is not a leaf
+      children: super.getStruct() // Get children using ObjectNode's getStruct
+    };
+    return selfStruct;
   }
 
   /**
-   * Gets the variable data structure for expressions.
-   * ```js
-   * // example:
-   * {
-   *   [key]: data,
-   *   [alias]: data
-   * }
-   * ```
-   * - The data has tracking capabilities; any object construction behavior will break tracking.
+   * get symbolical data
+   * - for expression usage
    * @returns 
    */
-  getWrappedData(): Record<string, any> {
+  getSymbolData(): Record<string, any> {
     const rst = {
       [this.key]: this.$data
     }
