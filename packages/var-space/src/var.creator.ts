@@ -158,9 +158,9 @@ const PROXY_HANDLER = {
       case 'key':
       case 'scope':
       case 'alias':
-      case '$data':
+      case '__$$innerDataHost':
       case "$label":
-      case 'build$data':
+      case 'build__$$innerReferenceData':
       case 'getStruct':
       case 'getNodeByPath':
       case 'setValueByPath':
@@ -227,7 +227,7 @@ const PROXY_HANDLER = {
       case 'getNodeByPath':
       case 'setValueByPath':
       case 'getData':
-      case 'build$data':
+      case 'build__$$innerReferenceData':
       case 'getSymbolData':
         console.warn(`System method ${key} cannot be modified`)
         return false
@@ -696,23 +696,22 @@ export class VarSpace extends ObjectNode {
 
   /**
    * Permanently immutable reference data provided by the variable space.
-   * - Initialized upon entity creation, subsequent references cannot be modified.
-   * - Uses mobx capability for deep observation.
+   * - only for internal use.
    */
-  $data: Record<string, any>;
+  __$$innerDataHost: Record<string, any>;
 
 
   /**
-   * Builds $data
+   * Builds __$$innerDataHost
    * - modifications are disallowed afterward, only updates via path are allowed.
    */
-  build$data(): void {
+  build__$$innerReferenceData(): void {
     let ref_data = this.getData()
     if (this.varDescriptor.observable) {
       ref_data = observable.object(ref_data, {}, { deep: true })
     }
 
-    Object.defineProperty(this, '$data', {
+    Object.defineProperty(this, '__$$innerDataHost', {
       enumerable: false,
       writable: false,
       configurable: false,
@@ -722,17 +721,17 @@ export class VarSpace extends ObjectNode {
 
   /**
    * Bulk sets data.
-   * - Setting on var space synchronizes to $data.
+   * - Setting on var space synchronizes to __$$innerDataHost.
    * @param data The data object to set.
    */
   $setData(data: object): void {
     super.$setData(data)
-    // If $data is already built
-    if (this.$data) {
-      // Recursively sync to $data, currently only supports two levels of synchronization
+    // If __$$innerDataHost is already built
+    if (this.__$$innerDataHost) {
+      // Recursively sync to __$$innerDataHost, currently only supports two levels of synchronization
       Object.entries(data).forEach(([key, value]) => {
-        if (this.$data[key] !== value) {
-          this.$data[key] = value;
+        if (this.__$$innerDataHost[key] !== value) {
+          this.__$$innerDataHost[key] = value;
         }
       });
     }
@@ -769,11 +768,31 @@ export class VarSpace extends ObjectNode {
   /**
    * Gets a node by path.
    * @param path The path to the node.
+   * @param beginWithVsKey If true, the path must start with the VarSpace key or alias. Defaults to false.
    * @returns The node or null if not found.
    */
-  getNodeByPath(path: string): ObjectNode | VarItemInstance | null {
-    const pathSegments = path.split('.');
-    let current: ObjectNode | VarItemInstance = this; // Explicitly type current
+  getNodeByPath(path: string, beginWithVsKey: boolean = false): ObjectNode | VarItemInstance | null {
+    let pathSegments = path.split('.');
+    let current: ObjectNode | VarItemInstance = this;
+
+    if (beginWithVsKey) {
+      if (pathSegments.length === 0) {
+        console.warn('getNodeByPath: Path cannot be empty when beginWithVsKey is true.');
+        return null;
+      }
+      const scopeKey = pathSegments.shift(); // Remove the first segment (VS key/alias)
+      if (scopeKey !== this.key && scopeKey !== this.alias) {
+        console.warn(`getNodeByPath: Path scope "${scopeKey}" does not match VarSpace key "${this.key}" or alias "${this.alias}".`);
+        return null;
+      }
+      // If only the VS key was provided, return the VarSpace itself
+      if (pathSegments.length === 0) {
+         return this; 
+      }
+    } 
+    // If beginWithVsKey is false, or after removing the VS key, 
+    // proceed to find the node within the children
+
     for (let i = 0; i < pathSegments.length; i++) {
       const key = pathSegments[i];
       if (!(current instanceof ObjectNode)) {
@@ -799,27 +818,49 @@ export class VarSpace extends ObjectNode {
    * - 
    * @param path The path to the node.
    * @param value The value to set.
+   * @param beginWithVsKey If true, the path must start with the VarSpace key or alias. Defaults to false.
    */
-  setValueByPath(path: string, value: any): void {
-    const pathSegments = path.split('.');
+  setValueByPath(path: string, value: any, beginWithVsKey: boolean = false): void {
+    let pathSegments = path.split('.');
+    let inputPathForLogging = path; // Keep original path for logging
+
+    if (beginWithVsKey) {
+       if (pathSegments.length === 0) {
+         console.warn(`setValueByPath: Path cannot be empty when beginWithVsKey is true.`);
+         return;
+       }
+       const scopeKey = pathSegments.shift(); 
+       if (scopeKey !== this.key && scopeKey !== this.alias) {
+         console.warn(`setValueByPath: Path scope "${scopeKey}" does not match VarSpace key "${this.key}" or alias "${this.alias}".`);
+         return;
+       }
+       // If only the VS key was provided, trying to set the VS itself? Not allowed.
+       if (pathSegments.length === 0) {
+          console.warn(`setValueByPath: Cannot set value directly on the VarSpace root using path "${inputPathForLogging}".`);
+          return;
+       }
+    } 
+    // pathSegments now contains the path relative to the VarSpace children
+
     if (pathSegments.length === 0) {
-      console.warn(`setValueByPath: Invalid path "${path}"`);
+      console.warn(`setValueByPath: Invalid relative path derived from "${inputPathForLogging}"`);
       return;
     }
 
     const key = pathSegments[pathSegments.length - 1];
     const parentPath = pathSegments.slice(0, -1).join('.');
 
-    // 1. Find Parent Node
+    // 1. Find Parent Node (using relative path segments)
     let parentNode: ObjectNode | VarItemInstance | null = null;
-    if (pathSegments.length === 1) {
+    if (pathSegments.length === 1) { // If only one segment left after removing VS key (or originally)
       parentNode = this;
     } else {
-      parentNode = this.getNodeByPath(parentPath);
+      // Find parent using the potentially shortened parentPath
+      parentNode = this.getNodeByPath(parentPath, false); // IMPORTANT: Call getNodeByPath with false here
     }
 
     if (!parentNode) {
-      console.warn(`setValueByPath: Parent node not found for path "${path}"`);
+      console.warn(`setValueByPath: Parent node not found for relative path "${parentPath}" derived from "${inputPathForLogging}"`);
       return;
     }
     if (!(parentNode instanceof ObjectNode)) {
@@ -835,7 +876,8 @@ export class VarSpace extends ObjectNode {
     }
 
     // 3. Validate Writability & Convert Value (using helper)
-    const validationResult = validateAndConvertValue(targetNode, value, path); // Use full path for logging
+    // Use the original full path for more informative logging inside the helper
+    const validationResult = validateAndConvertValue(targetNode, value, inputPathForLogging);
 
     if (!validationResult.success) {
       return;
@@ -847,20 +889,21 @@ export class VarSpace extends ObjectNode {
     try {
       const proxyAssignmentSuccess = (parentNode[key] = finalValue);
 
-      // 5. Sync $data only if proxy assignment also succeeded
-      if (proxyAssignmentSuccess && this.$data) {
+      // 5. Sync __$$innerDataHost only if proxy assignment also succeeded
+      if (proxyAssignmentSuccess && this.__$$innerDataHost) {
         action(() => {
-          let currentDataRef = this.$data;
-          for (let i = 0; i < pathSegments.length - 1; i++) {
+          let currentDataRef = this.__$$innerDataHost;
+          // Use relative pathSegments for __$$innerDataHost sync
+          for (let i = 0; i < pathSegments.length - 1; i++) { 
             const segment = pathSegments[i];
             if (currentDataRef[segment] === undefined || currentDataRef[segment] === null) {
-              console.warn(`setValueByPath: $data sync issue, intermediate path ${segment} not found.`);
+              console.warn(`setValueByPath: __$$innerDataHost sync issue, intermediate path ${segment} not found.`);
               return;
             }
             currentDataRef = currentDataRef[segment];
           }
           if (currentDataRef[key] !== finalValue) {
-            currentDataRef[key] = finalValue;
+             currentDataRef[key] = finalValue;
           }
         })();
       } else if (!proxyAssignmentSuccess) {
@@ -897,10 +940,10 @@ export class VarSpace extends ObjectNode {
    */
   getSymbolData(): Record<string, any> {
     const rst = {
-      [this.key]: this.$data
+      [this.key]: this.__$$innerDataHost
     };
     if (this.alias) {
-      rst[this.alias] = this.$data
+      rst[this.alias] = this.__$$innerDataHost
     }
     return rst;
   }

@@ -179,13 +179,12 @@ function createAndRenderVarSpace(isObservable: boolean) {
             return li;
         }
 
-        // Build the tree starting from the root structure children
-        if (rootStruct.children) {
-            rootStruct.children.forEach(childStruct => {
-                const node = buildNode(childStruct, data);
-                rootUl.appendChild(node);
-            });
-        }
+        // NEW LOGIC: Build the root node itself
+        // Wrap the initial data in an object keyed by the VarSpace key
+        const initialDataWrapper = { [rootStruct.key]: data };
+        const rootLi = buildNode(rootStruct, initialDataWrapper, ''); 
+        rootLi.style.marginLeft = '0px'; 
+        rootUl.appendChild(rootLi);
 
         container.appendChild(rootUl);
     }
@@ -232,7 +231,7 @@ function handleNodeClick(vs: VarSpace, element: HTMLElement, path: string) {
     if (nodeDetailsContainer) {
         try {
             // Use the getNodeByPath method on the VarSpace instance
-            const nodeStruct = vs.getNodeByPath(path);
+            const nodeStruct = vs.getNodeByPath(path, true);
             if (nodeStruct) {
                 nodeDetailsContainer.innerHTML = ''; // Clear previous
                 
