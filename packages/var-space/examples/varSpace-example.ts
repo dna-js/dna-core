@@ -197,6 +197,9 @@ function createAndRenderVarSpace(isObservable: boolean) {
         container.appendChild(rootUl);
     }
 
+    // normal use will not need
+    myVarSpace.__$dangerousInstance.$syncHostBasedOnStruct()
+
     currentAutorunDisposer = autorun(() => {
         renderVarSpaceTree(myVarSpace, treeViewContainer);
     });
