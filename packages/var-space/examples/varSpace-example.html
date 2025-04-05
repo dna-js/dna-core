@@ -1,36 +1,89 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VarSpace Example</title>
-    <style>
-        body { font-family: sans-serif; padding: 1em; }
-        pre { background-color: #f4f4f4; padding: 1em; border-radius: 4px; }
-        code { font-family: monospace; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VarSpace Example</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      height: 100vh; /* Make body take full viewport height */
+      margin: 0;
+    }
+    #main-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      border: 1px solid #ccc; /* Optional border */
+    }
+    #left-column {
+      width: 50%;
+      padding: 15px;
+      border-right: 1px solid #ccc;
+      overflow-y: auto; /* Scroll if content overflows */
+      height: 100%;
+      box-sizing: border-box; /* Include padding in width */
+    }
+    #right-column {
+      width: 50%;
+      padding: 15px;
+      overflow-y: auto; /* Scroll if content overflows */
+      height: 100%;
+      box-sizing: border-box; /* Include padding in width */
+      background-color: #f9f9f9;
+    }
+    #tree-view ul { /* Reset default ul padding/margin if needed */
+        padding-left: 0;
+        margin: 0;
+        list-style-type: none;
+    }
+    #tree-view li { /* Ensure li takes full width for click */
+        cursor: pointer;
+        padding: 3px;
+        margin-bottom: 5px;
+    }
+    #tree-view li:hover {
+        background-color: #f0f0f0;
+    }
+    .selected-node {
+        background-color: #e0f2ff !important; /* Light blue background */
+        font-weight: bold;
+    }
+    pre { /* Style for JSON output */
+      background-color: #fff;
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 4px;
+      white-space: pre-wrap; /* Wrap long lines */
+      word-wrap: break-word;
+    }
+    h4 {
+        margin-top: 0;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 5px;
+    }
+  </style>
 </head>
 <body>
-    <h1>VarSpace Basic Example</h1>
-    <p>This example demonstrates creating a VarSpace, defining its structure, setting data, and interacting with it using MobX reactivity. Changes in inputs for writable fields will update the VarSpace, and the tree will re-render automatically.</p>
-
-    <div>
+  <div>
       <label>
-        <input type="checkbox" id="observable-toggle" checked> <!-- Default to observable -->
-        Make VarSpace Globally Observable (recreates VarSpace on change)
+        <input type="checkbox" id="observable-toggle" checked>
+        Use Observable VarSpace (via MobX)
       </label>
-    </div>
-    <hr>
-    
-    <!-- Container for the reactive tree view -->
-    <div id="tree-view-container">
-        <h2>VarSpace Tree:</h2>
-        <div id="tree-view">Loading...</div>
-    </div>
+  </div>
 
-    <!-- Add a script tag to load the compiled JS -->
-    <!-- Assumes your build process compiles varSpace-example.ts to ./varSpace-example.js -->
-    <script type="module" src="./varSpace-example.js"></script>
+  <div id="main-container">
+    <div id="left-column">
+      <h4>Structure Tree</h4>
+      <div id="tree-view">Loading Tree...</div>
+    </div>
+    <div id="right-column">
+      <h4>Node Details</h4>
+      <div id="node-details">Click a node on the left to see details.</div>
+    </div>
+  </div>
 
+  <!-- Webpack will inject the script tag here -->
 </body>
 </html>

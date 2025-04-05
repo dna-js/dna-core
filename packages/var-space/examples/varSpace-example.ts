@@ -1,13 +1,16 @@
+//@ts-nocheck
 // Assuming VarSpace is exported from the main index of the package
-import { VarSpace, IVarStruct } from '../src/index'; // Adjusted path relative to examples dir
+import { VarSpace, IVarStruct } from '../src/index'; // Removed findNodeByPath import
 import { autorun, toJS, IReactionDisposer } from 'mobx'; // Import MobX autorun and Disposer type
 
 // Get UI Elements
 const treeViewContainer = document.getElementById('tree-view') as HTMLElement | null;
+const nodeDetailsContainer = document.getElementById('node-details') as HTMLElement | null; // Get the new container
 const observableToggle = document.getElementById('observable-toggle') as HTMLInputElement | null;
 
-// State for MobX reaction disposer
+// State for MobX reaction disposer and selected node
 let currentAutorunDisposer: IReactionDisposer | null = null;
+let selectedNodeElement: HTMLElement | null = null; // Keep track of the selected LI element
 
 // Helper to log messages (can be kept for console debugging)
 function log(message: string, data?: any) {
@@ -73,6 +76,8 @@ function createAndRenderVarSpace(isObservable: boolean) {
     log('Building reactive $data...');
     myVarSpace.build$data();
     log("Final reactive $data object built:", myVarSpace.$data);
+    window.vs = myVarSpace;
+    window.vs_data = myVarSpace.getSymbolData();
 
     // --- Tree Rendering Logic ---
 
@@ -80,6 +85,10 @@ function createAndRenderVarSpace(isObservable: boolean) {
         log("Rendering tree...");
         const rootStruct = vs.getVsStruct(); // Get structure
         const data = vs.$data; // Get the reactive data
+        selectedNodeElement = null; // Clear selection on re-render
+        if (nodeDetailsContainer) {
+            nodeDetailsContainer.innerHTML = 'Click a node on the left to see details.'; // Reset details on re-render
+        }
 
         container.innerHTML = ''; // Clear previous tree
         const rootUl = document.createElement('ul');
@@ -90,9 +99,21 @@ function createAndRenderVarSpace(isObservable: boolean) {
         function buildNode(itemStruct: IVarStruct, currentData: any, parentPath: string = '') {
             const li = document.createElement('li');
             li.style.marginLeft = '20px';
+            li.style.marginBottom = '5px';
             const nodePath = parentPath ? `${parentPath}.${itemStruct.key}` : itemStruct.key;
+            li.setAttribute('data-path', nodePath); // Store path on the element
 
-            let content = `<strong>${itemStruct.label || itemStruct.key}</strong> (${itemStruct.type})`;
+            // Create styled spans for key and type
+            const keySpan = `<span style="background-color: #eee; color: #333; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 5px;">${itemStruct.key}</span>`;
+            const typeSpan = `<span style="background-color: #dcf2ff; color: #005a8d; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 5px;">${itemStruct.type}</span>`;
+
+            // Add style to strong tag for softer color
+            let content = `<strong style="color: #555;">${itemStruct.label || itemStruct.key}</strong> ${keySpan} ${typeSpan}`;
+
+            li.addEventListener('click', (event) => {
+                event.stopPropagation(); // Prevent clicks bubbling up to parent LIs
+                handleNodeClick(vs, li, nodePath);
+            });
 
             if (itemStruct.children && itemStruct.children.length > 0) {
                 // Object Node
@@ -193,6 +214,49 @@ function setNestedValue(obj: any, path: string, value: any) {
         }
     }
     current[pathSegments[pathSegments.length - 1]] = value;
+}
+
+// --- Node Click Handler --- //
+
+function handleNodeClick(vs: VarSpace, element: HTMLElement, path: string) {
+    log(`Node clicked: ${path}`);
+
+    // Update selection highlight
+    if (selectedNodeElement) {
+        selectedNodeElement.classList.remove('selected-node');
+    }
+    element.classList.add('selected-node');
+    selectedNodeElement = element;
+
+    // Find and display node details
+    if (nodeDetailsContainer) {
+        try {
+            // Use the getNodeByPath method on the VarSpace instance
+            const nodeStruct = vs.getNodeByPath(path);
+            if (nodeStruct) {
+                nodeDetailsContainer.innerHTML = ''; // Clear previous
+                
+                // Create and add the path display
+                const pathElement = document.createElement('em');
+                pathElement.textContent = path;
+                pathElement.style.display = 'block'; // Make it block level
+                pathElement.style.marginBottom = '10px'; // Add some space below
+                nodeDetailsContainer.appendChild(pathElement);
+
+                // Add the descriptor details
+                const pre = document.createElement('pre');
+                pre.textContent = JSON.stringify(nodeStruct.varDescriptor, null, 2);
+                nodeDetailsContainer.appendChild(pre);
+            } else {
+                nodeDetailsContainer.textContent = `Node details not found for path: ${path}`;
+            }
+        } catch (error) {
+            console.error("Error finding or displaying node details:", error);
+            nodeDetailsContainer.textContent = `Error retrieving details for path: ${path}`;
+        }
+    } else {
+        log("Node details container not found.");
+    }
 }
 
 // --- Initial Setup & Event Listener --- //

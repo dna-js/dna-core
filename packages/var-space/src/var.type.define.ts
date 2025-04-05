@@ -245,6 +245,12 @@ VarTypeDateTime.configRule('Number', (value: number) => {
   return { success: true, convertedValue: dateValue.getTime() }; // Return timestamp
 });
 
+// DateTime <- Date
+VarTypeDateTime.configRule('Date', (value: Date) => {
+  return { success: true, convertedValue: value.getTime() }; // Return timestamp
+});
+
+
 const VarTypeTime = defineVarType<number>('Time', { defaultValue: t.getTime(), defaultLabel: 'Time', defaultDescriptor: { nativeType: 'Number' } })
 // Add rules similar to DateTime, returning timestamp
 VarTypeTime.configRule('String', (value: string) => {
@@ -264,6 +270,11 @@ VarTypeTime.configRule('Number', (value: number) => {
     return { success: false, error: `Cannot convert number ${value} to a valid Time` };
   }
   return { success: true, convertedValue: dateValue.getTime() }; // Return timestamp
+});
+
+// Time <- Date
+VarTypeTime.configRule('Date', (value: Date) => {
+  return { success: true, convertedValue: value.getTime() }; // Return timestamp
 });
 
 const VarTypeDate = defineVarType<number>('Date', { defaultValue: t.getTime(), defaultLabel: 'Date', defaultDescriptor: { nativeType: 'Number' } })
@@ -287,6 +298,11 @@ VarTypeDate.configRule('Number', (value: number) => {
   }
   // Could potentially strip time part here, but returning timestamp for now
   return { success: true, convertedValue: dateValue.getTime() };
+});
+
+// Date <- DateTime
+VarTypeDate.configRule('DateTime', (value: number) => {
+  return { success: true, convertedValue: value };
 });
 
 function isPlainObject(obj: any): boolean {

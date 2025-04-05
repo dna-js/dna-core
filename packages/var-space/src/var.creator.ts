@@ -15,12 +15,12 @@ import {
   isPlainObject
 } from "./var.type.define";
 
-import { observable } from "mobx";
+import { observable, action } from "mobx";
 
 /**
  * Strict mode, performs strict type checking.
  */
-let __strict__ =  false;
+let __strict__ = true;
 
 /**
  * Creates a copy of the type descriptor (solves shared reference issues).
@@ -34,11 +34,125 @@ function createDescriptor(type: NativeType): VarDescriptor {
 }
 
 /**
+ * Validates writability and performs type conversion if necessary.
+ * @param targetNode The node being assigned to.
+ * @param value The incoming value.
+ * @param key The key/path segment for logging.
+ * @returns Result object indicating success, the final value, and any error.
+ */
+function validateAndConvertValue(
+  targetNode: VarItemInstance | ObjectNode,
+  value: any,
+  key: string
+): { success: boolean; finalValue?: any; error?: string } {
+  // 1. Check writable
+  if (targetNode.varDescriptor.writable === false) {
+    const error = `Property ${key} is not writable`;
+    console.warn(error);
+    return { success: false, error };
+  }
+
+  // 2. Handle Assignment Logic (Type Matching/Conversion)
+  const from_type = inferVarType(value);
+  const this_type = targetNode.varDescriptor.nativeType;
+
+  // 2.1 Strict Mode: Disallow undefined assignment (unless target is ObjectNode, handled later)
+  if (
+    __strict__ &&
+    value === undefined &&
+    !(targetNode instanceof ObjectNode)
+  ) {
+    const error = `[Strict Mode] Property ${key} (${this_type}) does not accept undefined value`;
+    console.warn(error);
+    return { success: false, error };
+  }
+
+  let finalValue = value;
+  let conversionError: string | undefined = undefined;
+
+  // 2.2 Type Matching or Conversion Needed?
+  // Skip detailed checks if target is Object and value is Object (proxy setter handles recursion)
+  if (
+    !(targetNode instanceof ObjectNode && from_type === 'Object') &&
+    this_type !== from_type &&
+    from_type !== 'Unknown'
+  ) {
+    if (__strict__) {
+      // --- Strict Mode: Use the rule map ---
+      const thisVarType = getVarType(this_type);
+      let conversionFn: ConversionFn | undefined = undefined;
+
+      if (!thisVarType) {
+        conversionError = `[Strict Mode] Internal Error: Cannot find VarType definition for type ${this_type}`;
+      } else {
+        conversionFn = thisVarType.getConversionRule(from_type);
+      }
+
+      if (!conversionError && conversionFn) {
+        const result = conversionFn(value);
+        if (result.success) {
+          finalValue = result.convertedValue;
+        } else {
+          conversionError =
+            result.error ||
+            `[Strict Mode] Type conversion failed: ${key} (${this_type}) <- ${from_type}`;
+        }
+      } else if (!conversionError) {
+        conversionError = `[Strict Mode] Property ${key} (${this_type}) does not accept value of type ${from_type}`;
+      }
+      // --- End of Strict Mode Rule Map Logic ---
+    } else {
+      // --- Non-Strict Mode ---
+      if (this_type === 'Boolean' && from_type === 'Number') {
+        finalValue = value !== 0;
+      } else if (this_type === 'Number' && from_type === 'String') {
+        const numValue = Number(value);
+        if (isNaN(numValue)) {
+          conversionError = `Property ${key} type conversion failed: Cannot convert string "${value}" to number`;
+        } else {
+          finalValue = numValue;
+        }
+      } else if (
+        this_type === 'String' &&
+        (from_type === 'Number' || from_type === 'Boolean')
+      ) {
+        finalValue = String(value);
+      } else {
+        conversionError = `Property ${key} type mismatch (non-strict mode), this_type: ${this_type}, from_type: ${from_type}`;
+      }
+      // --- End of Non-Strict Mode ---
+    }
+  }
+
+  // 3. Final Check for Object Node Assignment Type Mismatch
+  if (
+    targetNode instanceof ObjectNode &&
+    from_type !== 'Object' &&
+    value !== undefined
+  ) {
+    if (__strict__) {
+      conversionError = `[Strict Mode] Cannot assign non-object type ${from_type} to object property ${key}`;
+    } else {
+      conversionError = `Cannot assign non-object type ${from_type} to object property ${key}.`;
+    }
+  }
+
+
+  if (conversionError) {
+    console.error(conversionError);
+    return { success: false, error: conversionError };
+  }
+
+  return { success: true, finalValue };
+}
+
+/**
  * 变量节点，proxy handler， 
  * - 用于隐藏结构直接访问变量
  */
 const PROXY_HANDLER = {
-  get(target: ObjectNode|VarSpace, key: string) {
+  get(target: ObjectNode | VarSpace, key: string) { // Allow symbol keys
+    // Handle known properties (existing switch cases)
     switch (key) {
       // RootVarObject properties
       case 'key':
@@ -48,10 +162,11 @@ const PROXY_HANDLER = {
       case "$label":
       case 'build$data':
       case 'getStruct':
-      case 'getVarNode':
+      case 'getNodeByPath':
+      case 'setValueByPath':
       // ObjectNode (and inherited) properties/methods
       case 'getChildNode':
-      case 'getChildInfo':  
+      case 'getChildInfo':
       case '$setData':
       case 'getVsStruct':
       case '$appendLeaf':
@@ -59,17 +174,21 @@ const PROXY_HANDLER = {
       case '$deleteVar':
       case '$hasVar':
       case '$varNodes':
-      case 'leaf':
+      case 'isLeaf':
       case 'varDescriptor':
       case 'getData':
       case 'getSymbolData':
       case '$backgroundData':
-        return target[key];
+        const prop = target[key];
+        if (typeof prop === 'function') {
+          return prop.bind(target);
+        }
+        return prop;
       default:
         // Forward value access to child nodes
         const node = target.$varNodes.get(key)?.[0]
         if (!node) return undefined;
-        
+
         if (node instanceof ObjectNode) {
           return node
         } else {
@@ -105,7 +224,8 @@ const PROXY_HANDLER = {
       case 'getVsStruct':
       case '$setData':
       case '$hasVar':
-      case 'getVarNode':
+      case 'getNodeByPath':
+      case 'setValueByPath':
       case 'getData':
       case 'build$data':
       case 'getSymbolData':
@@ -116,147 +236,65 @@ const PROXY_HANDLER = {
     // 2. Check if target node exists
     const node = target.$varNodes.get(key)?.[0];
     if (!node) {
-      console.warn(`Property ${key} does not exist, cannot set value`);
+      console.warn(`Property ${key} does not exist, cannot set value (proxy setter)`);
       return false;
     }
 
-    // 3. Check writable
-    if (node.varDescriptor.writable === false) {
-      console.warn(`Property ${key} is not writable`);
+    // 3. Use helper for validation, writability check, and conversion
+    const validationResult = validateAndConvertValue(node, value, key);
+
+    if (!validationResult.success) {
+      // Helper already logged the error
       return false;
     }
 
-    // 4. Handle Assignment Logic
-    const from_type = inferVarType(value);
-    const this_type = node.varDescriptor.nativeType;
+    const finalValue = validationResult.finalValue;
 
-    // 4.1 Strict Mode: Disallow undefined assignment
-    if (__strict__ && value === undefined) {
-      console.warn(`[Strict Mode] Property ${key} (${this_type}) does not accept undefined value`);
-      return false;
-    }
-
-    let finalValue = value;
-    let assignmentAllowed = true;
-
-    // 4.2 Type Matching or Conversion
-    if (this_type !== from_type && from_type !== 'Unknown') {
-      if (__strict__) {
-        // --- Strict Mode: Use the rule map ---
-        // Get the VarType definition for the target type
-        const thisVarType = getVarType(this_type);
-        let conversionFn: ConversionFn | undefined = undefined;
-
-        if (!thisVarType) {
-          // This shouldn't happen if the node exists, but handle defensively
-          console.error(`[Strict Mode] Internal Error: Cannot find VarType definition for type ${this_type}`);
-          assignmentAllowed = false;
-        } else {
-          // Get the specific conversion rule using the public method
-          conversionFn = thisVarType.getConversionRule(from_type);
-        }
-        
-        if (assignmentAllowed && conversionFn) { // Check assignmentAllowed before proceeding
-          // Rule exists, attempt conversion/validation
-          // Update: Pass necessary context if ConversionFn signature requires it (assuming it's just (value) => result for now)
-          const result = conversionFn(value); 
-          if (result.success) {
-            finalValue = result.convertedValue;
-          } else {
-            // Conversion failed
-            console.error(result.error || `[Strict Mode] Type conversion failed: ${key} (${this_type}) <- ${from_type}`);
-            assignmentAllowed = false;
-          }
-        } else {
-          // No rule found for this combination: Disallowed in strict mode
-          console.error(`[Strict Mode] Property ${key} (${this_type}) does not accept value of type ${from_type}`);
-          assignmentAllowed = false;
-        }
-        // --- End of Strict Mode Rule Map Logic ---
-
-      } else {
-         // --- Non-Strict Mode (Keep previous lenient behavior) ---
-         if (this_type === 'Boolean' && from_type === 'Number') {
-            finalValue = value !== 0;
-         } else if (this_type === 'Number' && from_type === 'String') {
-             const numValue = Number(value);
-             if (isNaN(numValue)) {
-                 console.error(`Property ${key} type conversion failed: Cannot convert string "${value}" to number`);
-                 return false; // Keep original behavior: return false
-             }
-             finalValue = numValue;
-         } else if (this_type === 'String' && (from_type === 'Number' || from_type === 'Boolean')) {
-             finalValue = String(value);
-         } else {
-             console.warn(`Property ${key} type mismatch (non-strict mode), this_type: ${this_type}, from_type: ${from_type}`);
-             // Proceed with assignment despite warning (original behavior)
-         }
-         // --- End of Non-Strict Mode --- 
-      }
-    }
-
-    // 5. Perform Assignment if allowed
-    if (!assignmentAllowed) {
-      return false; // Assignment failed strict check or non-strict conversion failure
-    }
-
-    // Handle assignment for Object nodes specifically
+    // 4. Perform Assignment with validated/converted value
     if (node instanceof ObjectNode) {
-       const objNode = node as ObjectNode; // We know node is ObjectNode here
-       if (from_type === 'Object') {
-           // Assign properties to children or background data
-           // Use finalValue which should be the validated object in strict mode
-           const valueToAssign = finalValue; 
-           const backgroundData = { ...(objNode.$backgroundData || {}) }; // Preserve existing background data
-           let childAssignmentFailed = false;
+      // Handle object assignment (recursive via proxy)
+      const objNode = node as ObjectNode;
+      const from_type = inferVarType(finalValue); // Check type of finalValue
 
-           Object.keys(valueToAssign).forEach(k => {
-               if (objNode.$varNodes.has(k)) {
-                   // Assign using the proxy setter for the child key 'k'
-                   // This will trigger the 'set' handler recursively for the child
-                   try {
-                       // Directly trigger the proxy setter for the child property
-                       objNode[k] = valueToAssign[k];
-                       // Note: The above line might return true/false if the PROXY_HANDLER.set
-                       // is modified to return the result. Currently it doesn't directly,
-                       // so we rely on it logging errors if it fails internally.
-                       // For a robust failure check, PROXY_HANDLER.set would need to return the actual success state.
-                       // Assuming for now it logs error and we proceed unless we modify set to return reliably.
-                   } catch (e) {
-                       // Catch potential errors thrown by deeper sets (though current code uses console.error)
-                       console.error(`Error setting property ${key}.${k} during object assignment:`, e);
-                       childAssignmentFailed = true;
-                   }
-               } else {
-                   // Add to background data if key doesn't exist on target node
-                   backgroundData[k] = valueToAssign[k];
-               }
-           });
+      // Need to ensure we are setting an object here after potential conversion
+      // validateAndConvertValue already prevents assigning non-objects to ObjectNode
+      if (from_type === 'Object') {
+        const valueToAssign = finalValue;
+        const backgroundData = { ...(objNode.$backgroundData || {}) };
+        let childAssignmentFailed = false;
 
-           objNode.$backgroundData = backgroundData;
+        Object.keys(valueToAssign).forEach(k => {
+          if (objNode.$varNodes.has(k)) {
+            try {
+              // Recursive call to this proxy setter for child key 'k'
+              objNode[k] = valueToAssign[k];
+            } catch (e) {
+              console.error(`Error setting property ${key}.${k} during object assignment:`, e);
+              childAssignmentFailed = true;
+            }
+          } else {
+            // Add to background data if key doesn't exist on target node
+            backgroundData[k] = valueToAssign[k];
+          }
+        });
 
-           // Optionally, make parent assignment fail if any child failed
-           // (Requires PROXY_HANDLER.set to reliably indicate failure, e.g., by throwing or returning false)
-           if (childAssignmentFailed) {
-               // console.error(`Object assignment for ${key} partially failed due to child errors.`);
-               // return false; // Uncomment this to fail the parent assignment
-           }
+        objNode.$backgroundData = backgroundData;
 
-       } else {
-           // Assigning a non-object to an Object node
-           if (__strict__) {
-               console.error(`[Strict Mode] Cannot assign non-object type ${from_type} to object property ${key}`); // Message kept for clarity
-               return false;
-           } else {
-               console.warn(`Assigning non-object type ${from_type} to object property ${key}. This may lead to unexpected behavior.`);
-               // Prevent this even in non-strict mode for clarity?
-               return false; // Let's block this assignment always.
-           }
-       }
-    } else {
-        if (node.value !== finalValue) { 
-          node.value = finalValue;
+        if (childAssignmentFailed) {
+          return false; // Fail parent assignment if any child failed
         }
+      } else {
+        // This case should technically be unreachable due to validateAndConvertValue,
+        // but keep a safeguard.
+        console.error(`Internal Error: Attempted to assign non-object to ObjectNode ${key} after validation.`);
+        return false;
+      }
+    } else {
+      // Leaf node assignment
+      // Check if value actually changed before assignment
+      if (node.value !== finalValue) {
+        node.value = finalValue;
+      }
     }
 
     return true; // Assignment successful
@@ -284,7 +322,7 @@ export type IVarStruct = {
   enumerable: boolean;
 
   children?: IVarStruct[];
-  leaf?: boolean;
+  isLeaf?: boolean;
 }
 
 // ==============================Above is the underlying capability of variables===================================
@@ -296,7 +334,7 @@ type InstanceInfo = {
   /** display label */
   label?: string,
   /** is leaf node */
-  leaf?: boolean,
+  isLeaf?: boolean,
   [key: string]: any
 }
 
@@ -312,12 +350,12 @@ type IVarMetaProps = {
  * An object node
  */
 export class ObjectNode {
-  leaf: boolean = false;
+  isLeaf: boolean = false;
 
   /**
    * key -> [varInstance, info]
    */
-  $varNodes: Map<string, [VarItemInstance|ObjectNode, InstanceInfo]> = new Map();
+  $varNodes: Map<string, [VarItemInstance | ObjectNode, InstanceInfo]> = new Map();
 
   protected getChildNode(key: string) {
     return this.$varNodes.get(key)?.[0]
@@ -334,7 +372,7 @@ export class ObjectNode {
    */
   $backgroundData: Record<string, any> = {};
 
-  varDescriptor: VarDescriptor = createDescriptor('Object'); 
+  varDescriptor: VarDescriptor = createDescriptor('Object');
 
 
   [key: string]: any;
@@ -345,7 +383,7 @@ export class ObjectNode {
    * - This method bypasses the 'writable' restriction and can force updates on read-only variables.
    * @param data The data object to set.
    */
-  public $setData (data: object): void {
+  public $setData(data: object): void {
     if (!isPlainObject(data)) {
       console.warn('$setData only accepts plain objects as arguments');
       return;
@@ -355,7 +393,7 @@ export class ObjectNode {
 
     Object.entries(data).forEach(([key, value]) => {
       const node = that.getChildNode(key);
-      
+
       if (node) {
         // Node exists, update the value directly
         if (node instanceof ObjectNode) {
@@ -392,29 +430,29 @@ export class ObjectNode {
     key: string, options: IVarMetaProps
   ): [VarItemInstance, /** update */(newValue: any) => boolean, /** dispose */() => void] {
 
-    const { value, label, ...__descriptor} = options;
+    const { value, label, ...__descriptor } = options;
 
     // Check for duplicate registration
     if (this.$varNodes.has(key)) {
       console.warn(`Variable ${key} is already registered`);
       const existingNode = this.getChildNode(key);
       // Ensure it's not an ObjectNode being overwritten by a leaf
-       if (existingNode instanceof ObjectNode) {
-          const errorMsg = `Variable ${key} already exists as an object node and cannot be overwritten by a leaf node.`;
-          console.error(errorMsg);
-          throw new Error(errorMsg);
-       }
+      if (existingNode instanceof ObjectNode) {
+        const errorMsg = `Variable ${key} already exists as an object node and cannot be overwritten by a leaf node.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
       // Return existing leaf node with its update and dispose (no-op dispose)
-      const updateFn = (newValue: any): boolean => { 
-        try { 
-          this[key] = newValue; 
+      const updateFn = (newValue: any): boolean => {
+        try {
+          this[key] = newValue;
           return true; // Assume success, rely on proxy logs for errors
-        } catch (e) { 
+        } catch (e) {
           console.error(`Update failed for ${key}:`, e);
-          return false; 
-        } 
+          return false;
+        }
       };
-      return [existingNode as VarItemInstance, updateFn, () => {}];
+      return [existingNode as VarItemInstance, updateFn, () => { }];
     }
 
     // Ensure type or value is provided
@@ -437,23 +475,23 @@ export class ObjectNode {
     }
 
     // Create and set descriptor
-    
+
     const finalDesc: VarDescriptor = { ...createDescriptor(varType), ...__descriptor };
 
     // Create VarItemInstance (leaf node)
     const xVar: VarItemInstance = { value: finalValue, varDescriptor: finalDesc };
 
-    this.$varNodes.set(key, [xVar, {label: label || key, leaf: true}]);
+    this.$varNodes.set(key, [xVar, { label: label || key, isLeaf: true }]);
 
     // Return the node and dispose function
-    const updateFn = (newValue: any): boolean => { 
-      try { 
-        this[key] = newValue; 
+    const updateFn = (newValue: any): boolean => {
+      try {
+        this[key] = newValue;
         return true; // Assume success, rely on proxy logs for errors
-      } catch (e) { 
+      } catch (e) {
         console.error(`Update failed for ${key}:`, e);
-        return false; 
-      } 
+        return false;
+      }
     };
     const disposeFn = () => { this.$deleteVar(key); };
     return [xVar, updateFn, disposeFn];
@@ -474,23 +512,23 @@ export class ObjectNode {
       console.warn(`Variable ${key} is already registered`);
       const existingNode = this.getChildNode(key);
       if (existingNode instanceof ObjectNode) {
-          // Return existing object node
-          const updateFn = (newData: object): boolean => { 
-            try { 
-              this[key] = newData; 
-              return true; // Assume success, rely on proxy logs for errors
-            } catch (e) { 
-              console.error(`Update failed for ${key}:`, e);
-              return false; 
-            } 
-          };
-          const disposeFn = () => { this.$deleteVar(key); }; // Keep existing dispose logic for duplicates? Or no-op? Let's keep delete.
-          return [existingNode, updateFn, disposeFn];
+        // Return existing object node
+        const updateFn = (newData: object): boolean => {
+          try {
+            this[key] = newData;
+            return true; // Assume success, rely on proxy logs for errors
+          } catch (e) {
+            console.error(`Update failed for ${key}:`, e);
+            return false;
+          }
+        };
+        const disposeFn = () => { this.$deleteVar(key); }; // Keep existing dispose logic for duplicates? Or no-op? Let's keep delete.
+        return [existingNode, updateFn, disposeFn];
       } else {
-          // Key exists but is not an object node
-          const errorMsg = `Variable ${key} already exists as a leaf node and cannot be overwritten by an object node.`;
-          console.error(errorMsg);
-          throw new Error(errorMsg);
+        // Key exists but is not an object node
+        const errorMsg = `Variable ${key} already exists as a leaf node and cannot be overwritten by an object node.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
       }
     }
 
@@ -498,7 +536,7 @@ export class ObjectNode {
     const { label, ...descriptorProps } = options || {};
 
     // Create and set descriptor
-    const finalDesc: VarDescriptor = { 
+    const finalDesc: VarDescriptor = {
       ...createDescriptor('Object'), // Start with Object defaults
       ...descriptorProps // Apply provided descriptor props
     };
@@ -509,23 +547,23 @@ export class ObjectNode {
     xObj.varDescriptor = finalDesc; // Assign the combined descriptor
 
     // Create InstanceInfo
-    const xInfo: InstanceInfo = { 
+    const xInfo: InstanceInfo = {
       label: label || key,
-      leaf: false // It's a nest node
+      isLeaf: false // Renamed from leaf
     };
 
     // Add to map
     this.$varNodes.set(key, [xObj, xInfo]);
 
     // Return the node and dispose function
-    const updateFn = (newData: object): boolean => { 
-      try { 
-        this[key] = newData; 
+    const updateFn = (newData: object): boolean => {
+      try {
+        this[key] = newData;
         return true; // Assume success, rely on proxy logs for errors
-      } catch (e) { 
+      } catch (e) {
         console.error(`Update failed for ${key}:`, e);
-        return false; 
-      } 
+        return false;
+      }
     };
     const disposeFn = () => { this.$deleteVar(key); };
     return [xObj, updateFn, disposeFn];
@@ -563,10 +601,10 @@ export class ObjectNode {
     })
 
     // merge background data
-    if (Object.keys(this.$backgroundData||[]).length > 0  ) {
+    if (Object.keys(this.$backgroundData || []).length > 0) {
       Object.assign(data, this.$backgroundData)
     }
-    
+
     return data
   }
 
@@ -577,7 +615,7 @@ export class ObjectNode {
    */
   getStruct(): IVarStruct[] {
     const result: IVarStruct[] = [];
-    
+
     this.$varNodes.forEach((node, key) => {
       const varObject = node[0];
       // Create basic structure
@@ -587,17 +625,17 @@ export class ObjectNode {
         type: varObject.varDescriptor.nativeType,
         writable: varObject.varDescriptor.writable !== false,
         enumerable: varObject.varDescriptor.enumerable !== false,
-        leaf: varObject instanceof ObjectNode ? false : true
+        isLeaf: varObject instanceof ObjectNode ? false : true
       };
-      
+
       // If it's an object node, recursively get the child structure
       if (varObject instanceof ObjectNode) {
         _struct.children = (varObject as ObjectNode).getStruct();
       }
-      
+
       result.push(_struct);
     });
-    
+
     // Sort by key name to ensure stable structure
     return result.sort((a, b) => a.key.localeCompare(b.key));
   }
@@ -665,15 +703,15 @@ export class VarSpace extends ObjectNode {
 
 
   /**
-   * Builds $data, modifications are disallowed afterward, only updates via path are allowed.
+   * Builds $data
+   * - modifications are disallowed afterward, only updates via path are allowed.
    */
   build$data(): void {
-    // Initialize $data, modifications disallowed afterward, only updates via path allowed
     let ref_data = this.getData()
     if (this.varDescriptor.observable) {
-      ref_data = observable.object(ref_data, {}, {deep: true})
+      ref_data = observable.object(ref_data, {}, { deep: true })
     }
-    
+
     Object.defineProperty(this, '$data', {
       enumerable: false,
       writable: false,
@@ -712,16 +750,16 @@ export class VarSpace extends ObjectNode {
       if (!data.alias.startsWith('$')) {
         throw new Error(`Alias must start with "$": ${data.alias}`);
       }
-      this.alias = data.alias 
+      this.alias = data.alias
     }
 
     if (data.observable) {
       this.varDescriptor.observable = true
     }
-    if(data.enumerable!==undefined) {
+    if (data.enumerable !== undefined) {
       this.varDescriptor.enumerable = data.enumerable
     }
-    if (data.writable!==undefined) {
+    if (data.writable !== undefined) {
       this.varDescriptor.writable = data.writable
     }
 
@@ -729,60 +767,108 @@ export class VarSpace extends ObjectNode {
   }
 
   /**
-   * [Currently unused] Gets the node definition corresponding to the variable.
-   * - For security reasons, the returned node object is a dereferenced object.
-   * ### Example
-   * ```js
-   * const node = AppVs.getVarNode('$ctx.userId')
-   * ```
-   * @param varString Variable string, e.g., $mainForm.name, must start with the current object's key
+   * Gets a node by path.
+   * @param path The path to the node.
+   * @returns The node or null if not found.
    */
-  getVarNode(varString: string) {
-    const path = varString.split('.')
-
-    if (path.length === 0) {
-      console.warn('varString is invalid')
-      return null
-    }
-
-    const scopeKey = path.shift()
-    if (scopeKey !== this.key && scopeKey !== this.alias) {
-      console.warn(`${scopeKey} cannot be found in this scope.`)
-      return null
-    }
-
-    let current: VarItemInstance | ObjectNode = this
-    
-    // Traverse the path to get the node
-    for (let i = 0; i < path.length; i++) {
-      const key = path[i]
+  getNodeByPath(path: string): ObjectNode | VarItemInstance | null {
+    const pathSegments = path.split('.');
+    let current: ObjectNode | VarItemInstance = this; // Explicitly type current
+    for (let i = 0; i < pathSegments.length; i++) {
+      const key = pathSegments[i];
       if (!(current instanceof ObjectNode)) {
-        console.warn(`Path ${path.slice(0, i).join('.')} is not an object node`)
+        // Use pathSegments for the slice and join
+        console.warn(`Path ${pathSegments.slice(0, i).join('.')} is not an object node`)
         return null
       }
-      
-      const node = current.$varNodes.get(key)
+
+      const node: [VarItemInstance | ObjectNode, InstanceInfo] | undefined = current.$varNodes.get(key)
       if (!node) {
-        console.warn(`Path ${key} not found`)
+        console.warn(`Path ${key} not found`) // Should probably show full path like pathSegments.join('.')
         return null
       }
-      
-      current = node[0]
+
+      current = node[0] // This assignment is now valid
     }
-    
-    // Return a deep copy of the node to avoid reference modification
-    if (current instanceof ObjectNode) {
-      return {
-        type: 'Object',
-        varDescriptor: { ...current.varDescriptor },
-        children: current.getStruct()
-      }
+
+    return current
+  }
+
+  /**
+   * Sets a value by path.
+   * - 
+   * @param path The path to the node.
+   * @param value The value to set.
+   */
+  setValueByPath(path: string, value: any): void {
+    const pathSegments = path.split('.');
+    if (pathSegments.length === 0) {
+      console.warn(`setValueByPath: Invalid path "${path}"`);
+      return;
+    }
+
+    const key = pathSegments[pathSegments.length - 1];
+    const parentPath = pathSegments.slice(0, -1).join('.');
+
+    // 1. Find Parent Node
+    let parentNode: ObjectNode | VarItemInstance | null = null;
+    if (pathSegments.length === 1) {
+      parentNode = this;
     } else {
-      return {
-        type: 'Leaf',
-        varDescriptor: { ...current.varDescriptor },
-        value: current.value
+      parentNode = this.getNodeByPath(parentPath);
+    }
+
+    if (!parentNode) {
+      console.warn(`setValueByPath: Parent node not found for path "${path}"`);
+      return;
+    }
+    if (!(parentNode instanceof ObjectNode)) {
+      console.warn(`setValueByPath: Parent node at "${parentPath}" is not an ObjectNode.`);
+      return;
+    }
+
+    // 2. Find Target Node
+    const targetNode = parentNode.$varNodes.get(key)?.[0];
+    if (!targetNode) {
+      console.warn(`setValueByPath: Target node not found for key "${key}" within parent "${parentPath}"`);
+      return;
+    }
+
+    // 3. Validate Writability & Convert Value (using helper)
+    const validationResult = validateAndConvertValue(targetNode, value, path); // Use full path for logging
+
+    if (!validationResult.success) {
+      return;
+    }
+
+    const finalValue = validationResult.finalValue;
+
+    // 4. Trigger the parent's proxy setter with the validated/converted value
+    try {
+      const proxyAssignmentSuccess = (parentNode[key] = finalValue);
+
+      // 5. Sync $data only if proxy assignment also succeeded
+      if (proxyAssignmentSuccess && this.$data) {
+        action(() => {
+          let currentDataRef = this.$data;
+          for (let i = 0; i < pathSegments.length - 1; i++) {
+            const segment = pathSegments[i];
+            if (currentDataRef[segment] === undefined || currentDataRef[segment] === null) {
+              console.warn(`setValueByPath: $data sync issue, intermediate path ${segment} not found.`);
+              return;
+            }
+            currentDataRef = currentDataRef[segment];
+          }
+          if (currentDataRef[key] !== finalValue) {
+            currentDataRef[key] = finalValue;
+          }
+        })();
+      } else if (!proxyAssignmentSuccess) {
+        console.warn(`setValueByPath: Proxy assignment for "${path}" failed unexpectedly after pre-validation.`);
       }
+
+    } catch (error) {
+      console.error(`setValueByPath: Error during proxy assignment for path "${path}":`, error);
     }
   }
 
@@ -796,9 +882,9 @@ export class VarSpace extends ObjectNode {
       key: this.key,
       label: this.$label || this.key,
       type: 'Object', // VarSpace is always an Object type
-      writable: this.varDescriptor.writable !== false, 
+      writable: this.varDescriptor.writable !== false,
       enumerable: this.varDescriptor.enumerable !== false,
-      leaf: false, // VarSpace is not a leaf
+      isLeaf: false, // VarSpace is not a leaf, Renamed from leaf
       children: super.getStruct() // Get children using ObjectNode's getStruct
     };
     return selfStruct;
@@ -812,11 +898,10 @@ export class VarSpace extends ObjectNode {
   getSymbolData(): Record<string, any> {
     const rst = {
       [this.key]: this.$data
-    }
+    };
     if (this.alias) {
       rst[this.alias] = this.$data
     }
-
-    return rst
+    return rst;
   }
 }
