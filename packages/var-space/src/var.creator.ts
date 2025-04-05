@@ -15,7 +15,9 @@ import {
   isPlainObject
 } from "./var.type.define";
 
-import { observable, action, intercept } from "mobx";
+import { observable, action, intercept, isObservableObject, extendObservable } from "mobx";
+
+import { set_hidden_object, get_hidden_object, delete_hidden_object } from "./help"
 
 /**
  * Strict mode, performs strict type checking.
@@ -236,28 +238,17 @@ const PROXY_HANDLER = {
       if (from_type === 'Object') {
         const valueToAssign = finalValue;
         const backgroundData = { ...(objNode.$backgroundData || {}) };
-        let childAssignmentFailed = false;
 
         Object.keys(valueToAssign).forEach(k => {
           if (objNode.$varNodes.has(k)) {
-            try {
-              // Recursive call to this proxy setter for child key 'k'
-              objNode[k] = valueToAssign[k];
-            } catch (e) {
-              console.error(`Error setting property ${key}.${k} during object assignment:`, e);
-              childAssignmentFailed = true;
-            }
+            objNode[k] = valueToAssign[k];
           } else {
-            // Add to background data if key doesn't exist on target node
             backgroundData[k] = valueToAssign[k];
           }
         });
 
         objNode.$backgroundData = backgroundData;
 
-        if (childAssignmentFailed) {
-          return false; // Fail parent assignment if any child failed
-        }
       } else {
         // This case should technically be unreachable due to validateAndConvertValue,
         // but keep a safeguard.
@@ -417,6 +408,8 @@ export class ObjectNode {
         throw new Error(errorMsg);
       }
       // Return existing leaf node with its update and dispose (no-op dispose)
+      // Get hidden object info for existing node (might be undefined if not previously set)
+      const existingHidden = get_hidden_object(existingNode as VarItemInstance);
       const updateFn = (newValue: any): boolean => {
         try {
           this[key] = newValue;
@@ -426,7 +419,9 @@ export class ObjectNode {
           return false;
         }
       };
-      return [existingNode as VarItemInstance, updateFn, () => { }];
+      // Update disposeFn to also delete hidden object
+      const disposeFn = () => { this.$deleteVar(key); };
+      return [existingNode as VarItemInstance, updateFn, disposeFn];
     }
 
     // Ensure type or value is provided
@@ -448,6 +443,11 @@ export class ObjectNode {
       finalValue = varTypeDef.defaultValue;
     }
 
+    // if the parent is observable, make the new node observable
+    if (this.varDescriptor.observable) {
+      __descriptor.observable = true;
+    }
+
     // Create and set descriptor
 
     const finalDesc: VarDescriptor = { ...createDescriptor(varType), ...__descriptor };
@@ -456,6 +456,19 @@ export class ObjectNode {
     const xVar: VarItemInstance = { value: finalValue, varDescriptor: finalDesc };
 
     this.$varNodes.set(key, [xVar, { label: label || key, isLeaf: true }]);
+
+    // === Set hidden object for the new leaf node ===
+    const _hidden_obj_ = get_hidden_object(this);
+    if (_hidden_obj_) {
+      set_hidden_object(xVar, {
+        $vs: _hidden_obj_.$vs,
+        $path: _hidden_obj_.$path ? `${_hidden_obj_.$path}.${key}` : key,
+        $pNode: this
+      });
+    } else {
+      console.error(`[var-space]: Parent node for ${key} doesn't have hidden info. this should not happen`);
+    }
+    // =============================================
 
     // Return the node and dispose function
     const updateFn = (newValue: any): boolean => {
@@ -487,6 +500,8 @@ export class ObjectNode {
       const existingNode = this.getChildNode(key);
       if (existingNode instanceof ObjectNode) {
         // Return existing object node
+        // Get hidden object info for existing node
+        const existingHidden = get_hidden_object(existingNode);
         const updateFn = (newData: object): boolean => {
           try {
             this[key] = newData;
@@ -496,7 +511,8 @@ export class ObjectNode {
             return false;
           }
         };
-        const disposeFn = () => { this.$deleteVar(key); }; // Keep existing dispose logic for duplicates? Or no-op? Let's keep delete.
+        // Update disposeFn to also delete hidden object
+        const disposeFn = () => { this.$deleteVar(key); };
         return [existingNode, updateFn, disposeFn];
       } else {
         // Key exists but is not an object node
@@ -508,6 +524,11 @@ export class ObjectNode {
 
     // Extract label and descriptor properties from options
     const { label, ...descriptorProps } = options || {};
+
+    // if the parent is observable, make the new node observable
+    if (this.varDescriptor.observable) {
+      descriptorProps.observable = true;
+    }
 
     // Create and set descriptor
     const finalDesc: VarDescriptor = {
@@ -529,6 +550,19 @@ export class ObjectNode {
     // Add to map
     this.$varNodes.set(key, [xObj, xInfo]);
 
+    // === Set hidden object for the new nest node ===
+    const _hidden_obj_ = get_hidden_object(this);
+    if (_hidden_obj_) {
+      set_hidden_object(x, {
+        $vs: _hidden_obj_.$vs,
+        $path: _hidden_obj_.$path ? `${_hidden_obj_.$path}.${key}` : key,
+        $pNode: this
+      });
+    } else {
+       console.error(`[var-space]: Parent node for ${key} doesn't have hidden info. -- this should not happen`);
+    }
+    // =============================================
+
     // Return the node and dispose function
     const updateFn = (newData: object): boolean => {
       try {
@@ -549,6 +583,18 @@ export class ObjectNode {
    * @param key 
    */
   $deleteVar(key: string) {
+    // === Delete hidden object before deleting from map ===
+    const nodeToDelete = this.$varNodes.get(key)?.[0];
+    if (nodeToDelete) {
+      delete_hidden_object(nodeToDelete);
+      // If the node being deleted is an ObjectNode, recursively delete hidden objects of its children
+      if (nodeToDelete instanceof ObjectNode) {
+          nodeToDelete.$varNodes.forEach(([childNode], childKey) => {
+              delete_hidden_object(childNode); // Recursively delete
+          });
+      }
+    }
+    // ================================================
     this.$varNodes.delete(key)
   };
 
@@ -676,6 +722,49 @@ export class VarSpace extends ObjectNode {
    */
   __$dataHost: Record<string, any>;
 
+  constructor(data: IVarSpace) {
+    super()
+    if (!data.key.startsWith('$')) {
+      throw new Error(`Key must start with "$": ${data.key}`);
+    }
+    this.key = data.key
+    // label directly exist on varspace
+    this.$label = data.label || data.key
+    if (data.alias) {
+      if (!data.alias.startsWith('$')) {
+        throw new Error(`Alias must start with "$": ${data.alias}`);
+      }
+      this.alias = data.alias
+    }
+
+    if (data.observable) {
+      this.varDescriptor.observable = true
+    }
+    if (data.enumerable !== undefined) {
+      this.varDescriptor.enumerable = data.enumerable
+    }
+    if (data.writable !== undefined) {
+      this.varDescriptor.writable = data.writable
+    }
+
+    this.$buildHost()
+
+    // === Initialize proxy first ===
+    const proxiedThis = new Proxy(this, PROXY_HANDLER) as VarSpace;
+
+    // === Set hidden object for the root VarSpace ===
+    set_hidden_object(this, {
+      $vs: this, // Root refers to itself
+      $path: '',        // Root has empty path relative to itself
+      $pNode: null      // Root has no parent
+    });
+    // =============================================
+    queueMicrotask(() => {
+      this.$syncHostBasedOnStruct()
+    })
+
+    return proxiedThis // Return the proxied instance
+  }
 
   /**
    * Builds __$dataHost
@@ -704,8 +793,7 @@ export class VarSpace extends ObjectNode {
   @action // Decorator assumes MobX configuration allows decorators, or use action() wrapper
   private $syncHostBasedOnStruct(): void {
     if (!this.__$dataHost) {
-      console.warn("$syncHostBasedOnStruct called before __$dataHost was built.");
-      // Optionally call this.$buildHost() here if that's desired behavior
+      console.error("__$dataHost is not built");
       return;
     }
     this._recursiveSync(this, this.__$dataHost);
@@ -723,16 +811,26 @@ export class VarSpace extends ObjectNode {
       if (nodeInstance instanceof ObjectNode) {
         // Ensure target has an object for the key
         if (!targetData.hasOwnProperty(key) || typeof targetData[key] !== 'object' || targetData[key] === null) {
-          // Create a new observable object if missing or not an object
-          targetData[key] = {}; 
+          // Create a new deep observable object if missing or not an object, AND if the VarSpace is observable
+          targetData[key] = nodeInstance.varDescriptor.observable ? observable.object({}, {}, { deep: true }) : {}; 
+        } else if (nodeInstance.varDescriptor.observable && !isObservableObject(targetData[key])) {
+           // If VS is observable and the existing nested object isn't, make it deep observable
+          targetData[key] = observable.object(targetData[key], {}, { deep: true });
         }
         // Recurse into the nested object
         this._recursiveSync(nodeInstance, targetData[key]);
       } else {
         // Leaf node: Update value if different
         const currentValue = nodeInstance.value;
-        if (targetData[key] !== currentValue) {
-          targetData[key] = currentValue;
+        if (!targetData.hasOwnProperty(key) || targetData[key] !== currentValue) {
+          // Check if the *leaf itself* wants to be observable OR if the parent is already observable
+          if (nodeInstance.varDescriptor.observable && !isObservableObject(targetData)) {
+             // Use extendObservable to ensure the property assignment is tracked
+             extendObservable(targetData, { [key]: observable }, {[key]: currentValue});
+          } else {
+             // Standard assignment for non-observable contexts
+             targetData[key] = currentValue;
+          }
         }
       }
     });
@@ -767,36 +865,6 @@ export class VarSpace extends ObjectNode {
         }
       });
     }
-  }
-
-  constructor(data: IVarSpace) {
-    super()
-    if (!data.key.startsWith('$')) {
-      throw new Error(`Key must start with "$": ${data.key}`);
-    }
-    this.key = data.key
-    // label directly exist on varspace
-    this.$label = data.label || data.key
-    if (data.alias) {
-      if (!data.alias.startsWith('$')) {
-        throw new Error(`Alias must start with "$": ${data.alias}`);
-      }
-      this.alias = data.alias
-    }
-
-    if (data.observable) {
-      this.varDescriptor.observable = true
-    }
-    if (data.enumerable !== undefined) {
-      this.varDescriptor.enumerable = data.enumerable
-    }
-    if (data.writable !== undefined) {
-      this.varDescriptor.writable = data.writable
-    }
-
-    this.$buildHost()
-
-    return new Proxy(this, PROXY_HANDLER) as VarSpace
   }
 
   /**
@@ -921,31 +989,40 @@ export class VarSpace extends ObjectNode {
 
     // 4. Trigger the parent's proxy setter with the validated/converted value
     try {
-      const proxyAssignmentSuccess = (parentNode[key] = finalValue);
+      const proxyAssignmentSuccess = Reflect.set(parentNode, key, finalValue); // Use Reflect.set for clarity
 
-      // 5. Sync __$dataHost only if proxy assignment also succeeded
+      // 5. Sync __$dataHost only if proxy assignment also succeeded (Reflect.set returns true/false)
       if (proxyAssignmentSuccess && this.__$dataHost) {
         action(() => {
           let currentDataRef = this.__$dataHost;
           // Use relative pathSegments for __$dataHost sync
-          for (let i = 0; i < pathSegments.length - 1; i++) { 
+          for (let i = 0; i < pathSegments.length - 1; i++) {
             const segment = pathSegments[i];
-            if (currentDataRef[segment] === undefined || currentDataRef[segment] === null) {
-              console.warn(`setValueByPath: __$dataHost sync issue, intermediate path ${segment} not found.`);
-              return;
+            // Ensure intermediate paths exist in the data host
+            if (currentDataRef[segment] === undefined || typeof currentDataRef[segment] !== 'object' || currentDataRef[segment] === null) {
+               // If intermediate path doesn't exist or isn't an object, create it
+               // This handles cases where structure was added but data host wasn't fully synced yet.
+               // Check if the corresponding source node segment is observable
+               const intermediateSourceNode = this.getNodeByPath(pathSegments.slice(0, i + 1).join('.'), false);
+               const shouldBeObservable = intermediateSourceNode?.varDescriptor?.observable ?? false;
+               currentDataRef[segment] = shouldBeObservable ? observable.object({}, {}, { deep: true }) : {};
+               console.warn(`setValueByPath: __$dataHost sync created intermediate path ${pathSegments.slice(0, i + 1).join('.')}`);
             }
             currentDataRef = currentDataRef[segment];
           }
+          // Now assign the final value to the correct key in the potentially nested structure
           if (currentDataRef[key] !== finalValue) {
-             currentDataRef[key] = finalValue;
+            currentDataRef[key] = finalValue;
           }
         })();
       } else if (!proxyAssignmentSuccess) {
-        console.warn(`setValueByPath: Proxy assignment for "${path}" failed unexpectedly after pre-validation.`);
+        // Reflect.set returns false if the proxy's set handler returned false OR if the property is non-writable/non-configurable
+        console.warn(`setValueByPath: Assignment for "${path}" failed. Proxy trap likely returned false or property is restricted.`);
       }
 
     } catch (error) {
-      console.error(`setValueByPath: Error during assignment for path "${path}":`, error);
+      // Log errors from validation (if thrown), proxy rejection (TypeError), or internal assignment errors
+      console.error(`setValueByPath: Error during assignment or sync for path "${inputPathForLogging}":`, error);
     }
   }
 

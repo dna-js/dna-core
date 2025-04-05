@@ -1,7 +1,7 @@
 //@ts-nocheck
 // Assuming VarSpace is exported from the main index of the package
 import { VarSpace, IVarStruct } from '../src/index'; // Removed findNodeByPath import
-import { autorun, toJS, IReactionDisposer } from 'mobx'; // Import MobX autorun and Disposer type
+import { autorun, toJS, IReactionDisposer, extendObservable, observable } from 'mobx'; // Import MobX autorun and Disposer type
 
 // Get UI Elements
 const treeViewContainer = document.getElementById('tree-view') as HTMLElement | null;
@@ -44,7 +44,6 @@ function createAndRenderVarSpace(isObservable: boolean) {
         label: 'Application Data',
         observable: isObservable // Use the parameter here
     });
-    log("VarSpace instance created:", { key: myVarSpace.key, label: myVarSpace.$label, observable: myVarSpace.varDescriptor.observable });
 
     // 2. Define the structure using $appendLeaf and $appendNest
     log('Defining structure...');
@@ -73,18 +72,28 @@ function createAndRenderVarSpace(isObservable: boolean) {
     log("Data after $setData:", myVarSpace.getData());
 
     // 4. Build the final $data object - This makes it observable by MobX
-    log('Building reactive $data...');
-    // myVarSpace.build$data();
-    log("Final reactive $data object built:", myVarSpace.$data);
     window.vs = myVarSpace;
-    window.vs_data = myVarSpace.getSymbolData();
+    window.vs_data = myVarSpace.getSymbolData(); // Keep this for external access if needed
 
     // --- Tree Rendering Logic ---
 
+    // Helper function to get value using path from the VarSpace proxy
+    function getNestedValueByPath(obj: Record<string, any>, path: string): any {
+        const pathSegments = path.split('.');
+        let current: any = obj; 
+        for (const segment of pathSegments) {
+            if (current === undefined || current === null) {
+                 console.warn(`getNestedValueByPath: Invalid path segment encountered: ${segment} in path ${path}. Returning undefined.`);
+                 return undefined; 
+            }
+            current = current[segment];
+        }
+        return current;
+    }
+
     function renderVarSpaceTree(vs: VarSpace, container: HTMLElement) {
-        log("Rendering tree...");
         const rootStruct = vs.getVsStruct(); // Get structure
-        const data = vs.$data; // Get the reactive data
+        const data = myVarSpace.getSymbolData();
         selectedNodeElement = null; // Clear selection on re-render
         if (nodeDetailsContainer) {
             nodeDetailsContainer.innerHTML = 'Click a node on the left to see details.'; // Reset details on re-render
@@ -96,7 +105,7 @@ function createAndRenderVarSpace(isObservable: boolean) {
         rootUl.style.paddingLeft = '0';
 
         // Recursive function to build the tree nodes
-        function buildNode(itemStruct: IVarStruct, currentData: any, parentPath: string = '') {
+        function buildNode(itemStruct: IVarStruct, parentPath: string = '') {
             const li = document.createElement('li');
             li.style.marginLeft = '20px';
             li.style.marginBottom = '5px';
@@ -113,6 +122,7 @@ function createAndRenderVarSpace(isObservable: boolean) {
             li.addEventListener('click', (event) => {
                 event.stopPropagation(); // Prevent clicks bubbling up to parent LIs
                 handleNodeClick(vs, li, nodePath);
+                window.$varNode = vs.getNodeByPath(nodePath, true);
             });
 
             if (itemStruct.children && itemStruct.children.length > 0) {
@@ -121,15 +131,15 @@ function createAndRenderVarSpace(isObservable: boolean) {
                 childUl.style.listStyleType = 'none';
                 childUl.style.paddingLeft = '0';
                 itemStruct.children.forEach(child => {
-                    const childNode = buildNode(child, currentData?.[itemStruct.key], nodePath);
+                    const childNode = buildNode(child, nodePath);
                     childUl.appendChild(childNode);
                 });
                 li.innerHTML = content;
                 li.appendChild(childUl);
             } else {
                 // Leaf Node
-                const value = currentData?.[itemStruct.key];
-                content += `: ${JSON.stringify(value)}`; // Display current value (using stringify for clarity)
+                const value = getNestedValueByPath(data, nodePath);
+                content += `: ${JSON.stringify(value)}`; // Display current value
 
                 if (itemStruct.writable) {
                     const input = document.createElement('input');
@@ -158,8 +168,8 @@ function createAndRenderVarSpace(isObservable: boolean) {
                         if (path) {
                             log(`Updating path ${path} to:`, newValue);
                             try {
-                                // Use helper function for safer nested assignment
-                                setNestedValue(vs, path, newValue);
+                                // Use VarSpace method for setting value
+                                vs.setValueByPath(path, newValue, true); // Correctly use setValueByPath
 
                                 targetInput.style.backgroundColor = 'lightgreen';
                                 setTimeout(() => { targetInput.style.backgroundColor = ''; }, 500);
@@ -180,39 +190,18 @@ function createAndRenderVarSpace(isObservable: boolean) {
         }
 
         // NEW LOGIC: Build the root node itself
-        // Wrap the initial data in an object keyed by the VarSpace key
-        const initialDataWrapper = { [rootStruct.key]: data };
-        const rootLi = buildNode(rootStruct, initialDataWrapper, ''); 
+        const rootLi = buildNode(rootStruct, ''); 
         rootLi.style.marginLeft = '0px'; 
         rootUl.appendChild(rootLi);
 
         container.appendChild(rootUl);
     }
 
-    // --- MobX Autorun Setup --- //
-    if (treeViewContainer) {
-        // Setup the autorun and store its disposer
-        currentAutorunDisposer = autorun(() => {
-            renderVarSpaceTree(myVarSpace, treeViewContainer);
-        });
-    } else {
-        log("Tree view container not found, MobX autorun not started.");
-    }
+    currentAutorunDisposer = autorun(() => {
+        renderVarSpaceTree(myVarSpace, treeViewContainer);
+    });
 
     log(`--- VarSpace Creation Complete (Observable: ${isObservable}) ---`);
-}
-
-// --- Helper function for safely setting nested values via proxy --- //
-function setNestedValue(obj: any, path: string, value: any) {
-    const pathSegments = path.split('.');
-    let current = obj;
-    for (let i = 0; i < pathSegments.length - 1; i++) {
-        current = current[pathSegments[i]];
-        if (typeof current !== 'object' || current === null) {
-            throw new Error(`Invalid path segment: ${pathSegments[i]} is not an object.`);
-        }
-    }
-    current[pathSegments[pathSegments.length - 1]] = value;
 }
 
 // --- Node Click Handler --- //
@@ -260,20 +249,40 @@ function handleNodeClick(vs: VarSpace, element: HTMLElement, path: string) {
 
 // --- Initial Setup & Event Listener --- //
 
-if (observableToggle) {
-    // Initial call based on checkbox default state
-    createAndRenderVarSpace(observableToggle.checked);
+ // Initial call based on checkbox default state
+ createAndRenderVarSpace(observableToggle.checked);
 
-    // Add event listener to checkbox
-    observableToggle.addEventListener('change', (event) => {
-        const isChecked = (event.target as HTMLInputElement).checked;
-        createAndRenderVarSpace(isChecked);
-    });
-} else {
-    // Fallback or error if checkbox isn't found
-    log("Observable toggle checkbox not found. Cannot set up listener.");
-    // Optionally run with a default setting:
-    // createAndRenderVarSpace(true); // Default to observable if checkbox missing
-}
+ // Add event listener to checkbox
+ observableToggle.addEventListener('change', (event) => {
+    const isChecked = (event.target as HTMLInputElement).checked;
+    createAndRenderVarSpace(isChecked);
+ });
 
-log('--- VarSpace Example Initialization End ---'); 
+//  const testObj = window.$testObj = {
+//     name: 'test',
+//     age: 100,
+//     nested: {
+//         name: 'nested',
+//         age: 200
+//     }
+//  }
+
+//  testObj.nested = observable.object(testObj.nested, {
+//     deep: true
+// })
+
+// // extendObservable(testObj, {
+// //     nested: {
+// //         name: 'nested',
+// //         age: 200
+// //     }
+// // } ,{
+// //     nested: observable.deep
+// // })
+
+// autorun(() => {
+//     console.log('%c autorun', 'background: lightgreen; color: black;padding: 5px;border-radius: 5px;', testObj.nested.age);
+// })
+
+
+
