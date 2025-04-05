@@ -49,12 +49,12 @@ function createAndRenderVarSpace(isObservable: boolean) {
     // 2. Define the structure using $appendLeaf and $appendNest
     log('Defining structure...');
     myVarSpace.$appendLeaf('pageTitle', { nativeType: 'String', label: 'Page Title', value: 'Default Title' });
-    myVarSpace.$appendLeaf('counter', { nativeType: 'Number', label: '点击次数', value: 0 });
-    myVarSpace.$appendLeaf('lastUpdate', { nativeType: 'DateTime', label: '最后更新时间' }); // No initial value
+    myVarSpace.$appendLeaf('counter', { nativeType: 'Number', label: '点击次数' }); //No initial value,  will use default value 0 based on nativeType
+    myVarSpace.$appendLeaf('lastUpdate', { nativeType: 'DateTime', label: '最后更新时间' });
     myVarSpace.$appendLeaf('readOnlyInfo', { nativeType: 'String', label: 'Read Only Info', value: 'Cannot change me', writable: false });
 
     // Add a nested object for user settings
-    const [userSettingsNode] = myVarSpace.$appendNest('userSettings', { label: 'User Settings', nativeType: 'Object' });
+    const [userSettingsNode] = myVarSpace.$appendNest('userSettings', { label: 'User Settings', nativeType: 'Object', observable: true });
     userSettingsNode.$appendLeaf('theme', { nativeType: 'String', label: 'UI Theme', value: 'light' });
     userSettingsNode.$appendLeaf('notificationsEnabled', { nativeType: 'Boolean', label: 'Enable Notifications', value: true });
 
@@ -74,7 +74,7 @@ function createAndRenderVarSpace(isObservable: boolean) {
 
     // 4. Build the final $data object - This makes it observable by MobX
     log('Building reactive $data...');
-    myVarSpace.build$data();
+    // myVarSpace.build$data();
     log("Final reactive $data object built:", myVarSpace.$data);
     window.vs = myVarSpace;
     window.vs_data = myVarSpace.getSymbolData();

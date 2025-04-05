@@ -15,7 +15,7 @@ import {
   isPlainObject
 } from "./var.type.define";
 
-import { observable, action } from "mobx";
+import { observable, action, intercept } from "mobx";
 
 /**
  * Strict mode, performs strict type checking.
@@ -77,50 +77,26 @@ function validateAndConvertValue(
     this_type !== from_type &&
     from_type !== 'Unknown'
   ) {
-    if (__strict__) {
-      // --- Strict Mode: Use the rule map ---
-      const thisVarType = getVarType(this_type);
-      let conversionFn: ConversionFn | undefined = undefined;
+    const thisVarType = getVarType(this_type);
+    let conversionFn: ConversionFn | undefined = undefined;
 
-      if (!thisVarType) {
-        conversionError = `[Strict Mode] Internal Error: Cannot find VarType definition for type ${this_type}`;
-      } else {
-        conversionFn = thisVarType.getConversionRule(from_type);
-      }
-
-      if (!conversionError && conversionFn) {
-        const result = conversionFn(value);
-        if (result.success) {
-          finalValue = result.convertedValue;
-        } else {
-          conversionError =
-            result.error ||
-            `[Strict Mode] Type conversion failed: ${key} (${this_type}) <- ${from_type}`;
-        }
-      } else if (!conversionError) {
-        conversionError = `[Strict Mode] Property ${key} (${this_type}) does not accept value of type ${from_type}`;
-      }
-      // --- End of Strict Mode Rule Map Logic ---
+    if (!thisVarType) {
+      conversionError = `[Strict Mode] Internal Error: Cannot find VarType definition for type ${this_type}`;
     } else {
-      // --- Non-Strict Mode ---
-      if (this_type === 'Boolean' && from_type === 'Number') {
-        finalValue = value !== 0;
-      } else if (this_type === 'Number' && from_type === 'String') {
-        const numValue = Number(value);
-        if (isNaN(numValue)) {
-          conversionError = `Property ${key} type conversion failed: Cannot convert string "${value}" to number`;
-        } else {
-          finalValue = numValue;
-        }
-      } else if (
-        this_type === 'String' &&
-        (from_type === 'Number' || from_type === 'Boolean')
-      ) {
-        finalValue = String(value);
+      conversionFn = thisVarType.getConversionRule(from_type);
+    }
+
+    if (!conversionError && conversionFn) {
+      const result = conversionFn(value);
+      if (result.success) {
+        finalValue = result.convertedValue;
       } else {
-        conversionError = `Property ${key} type mismatch (non-strict mode), this_type: ${this_type}, from_type: ${from_type}`;
+        conversionError =
+          result.error ||
+          `[Strict Mode] Type conversion failed: ${key} (${this_type}) <- ${from_type}`;
       }
-      // --- End of Non-Strict Mode ---
+    } else if (!conversionError) {
+      conversionError = `[Strict Mode] Property ${key} (${this_type}) does not accept value of type ${from_type}`;
     }
   }
 
@@ -130,11 +106,7 @@ function validateAndConvertValue(
     from_type !== 'Object' &&
     value !== undefined
   ) {
-    if (__strict__) {
-      conversionError = `[Strict Mode] Cannot assign non-object type ${from_type} to object property ${key}`;
-    } else {
-      conversionError = `Cannot assign non-object type ${from_type} to object property ${key}.`;
-    }
+    conversionError = `Cannot assign non-object type ${from_type} to object property ${key}`;
   }
 
 
@@ -158,9 +130,9 @@ const PROXY_HANDLER = {
       case 'key':
       case 'scope':
       case 'alias':
-      case '__$$innerDataHost':
+      case '__$dataHost':
       case "$label":
-      case 'build__$$innerReferenceData':
+      case '$buildHost':
       case 'getStruct':
       case 'getNodeByPath':
       case 'setValueByPath':
@@ -184,6 +156,9 @@ const PROXY_HANDLER = {
           return prop.bind(target);
         }
         return prop;
+      // for internal use
+      case '__$dangerousInstance':
+        return target;
       default:
         // Forward value access to child nodes
         const node = target.$varNodes.get(key)?.[0]
@@ -227,7 +202,7 @@ const PROXY_HANDLER = {
       case 'getNodeByPath':
       case 'setValueByPath':
       case 'getData':
-      case 'build__$$innerReferenceData':
+      case '$buildHost':
       case 'getSymbolData':
         console.warn(`System method ${key} cannot be modified`)
         return false
@@ -410,9 +385,8 @@ export class ObjectNode {
           }
         }
       } else {
-        // Node does not exist, set to background data
         if (!that.$backgroundData) {
-          that.$backgroundData = {};
+          console.error('[var-space]: backgroundData is not set, cannot set value.(this logic should not happen)')
         }
         that.$backgroundData[key] = value;
       }
@@ -549,7 +523,7 @@ export class ObjectNode {
     // Create InstanceInfo
     const xInfo: InstanceInfo = {
       label: label || key,
-      isLeaf: false // Renamed from leaf
+      isLeaf: false
     };
 
     // Add to map
@@ -587,7 +561,8 @@ export class ObjectNode {
    * @returns 
    */
   getData() {
-    const data: Record<string, any> = {}
+    const data: Record<string, any> = {} 
+
     this.$varNodes.forEach((node, key) => {
       if (node[0] instanceof ObjectNode) {
         data[key] = node[0].getData()
@@ -601,6 +576,7 @@ export class ObjectNode {
     })
 
     // merge background data
+    // background data are not visible in struct
     if (Object.keys(this.$backgroundData || []).length > 0) {
       Object.assign(data, this.$backgroundData)
     }
@@ -698,40 +674,96 @@ export class VarSpace extends ObjectNode {
    * Permanently immutable reference data provided by the variable space.
    * - only for internal use.
    */
-  __$$innerDataHost: Record<string, any>;
+  __$dataHost: Record<string, any>;
 
 
   /**
-   * Builds __$$innerDataHost
+   * Builds __$dataHost
    * - modifications are disallowed afterward, only updates via path are allowed.
    */
-  build__$$innerReferenceData(): void {
-    let ref_data = this.getData()
+  private $buildHost(): void {
+    let _hostRoot = {}
     if (this.varDescriptor.observable) {
-      ref_data = observable.object(ref_data, {}, { deep: true })
+      _hostRoot = observable.object(_hostRoot, {}, { deep: true })
     }
 
-    Object.defineProperty(this, '__$$innerDataHost', {
+    Object.defineProperty(this, '__$dataHost', {
       enumerable: false,
       writable: false,
       configurable: false,
-      value: ref_data
+      value: _hostRoot
     })
   }
 
   /**
+   * based on $varNodes, reset __$dataHost
+   * This should be called when the structure ($varNodes) might have changed 
+   * (e.g., after $appendLeaf, $appendNest, $deleteVar) and needs to be reflected
+   * in the observable data host.
+   */
+  @action // Decorator assumes MobX configuration allows decorators, or use action() wrapper
+  private $syncHostBasedOnStruct(): void {
+    if (!this.__$dataHost) {
+      console.warn("$syncHostBasedOnStruct called before __$dataHost was built.");
+      // Optionally call this.$buildHost() here if that's desired behavior
+      return;
+    }
+    this._recursiveSync(this, this.__$dataHost);
+  }
+
+  /**
+   * Recursive helper to synchronize a target data object with a source ObjectNode structure.
+   * MUST be called within a MobX action.
+   * @param sourceNode The ObjectNode containing the source structure and values.
+   * @param targetData The corresponding data object within __$dataHost to update.
+   */
+  private _recursiveSync(sourceNode: ObjectNode, targetData: Record<string, any>): void {
+    // 1. Sync existing/new keys from sourceNode to targetData
+    sourceNode.$varNodes.forEach(([nodeInstance, info], key) => {
+      if (nodeInstance instanceof ObjectNode) {
+        // Ensure target has an object for the key
+        if (!targetData.hasOwnProperty(key) || typeof targetData[key] !== 'object' || targetData[key] === null) {
+          // Create a new observable object if missing or not an object
+          targetData[key] = {}; 
+        }
+        // Recurse into the nested object
+        this._recursiveSync(nodeInstance, targetData[key]);
+      } else {
+        // Leaf node: Update value if different
+        const currentValue = nodeInstance.value;
+        if (targetData[key] !== currentValue) {
+          targetData[key] = currentValue;
+        }
+      }
+    });
+
+    // 2. Move keys from targetData to backgroundData if no longer in sourceNode.$varNodes
+    Object.keys(targetData).forEach(key => {
+      if (!sourceNode.$varNodes.has(key)) {
+        // Value exists in observable data, but not in the current structure
+        const valueToMove = targetData[key];
+        // Move the value to backgroundData
+        sourceNode.$backgroundData[key] = valueToMove;
+        
+        // Remove the key from the observable targetData
+        delete targetData[key]; 
+      }
+    });
+  }
+
+  /**
    * Bulk sets data.
-   * - Setting on var space synchronizes to __$$innerDataHost.
+   * - Setting on var space synchronizes to __$dataHost.
    * @param data The data object to set.
    */
   $setData(data: object): void {
     super.$setData(data)
-    // If __$$innerDataHost is already built
-    if (this.__$$innerDataHost) {
-      // Recursively sync to __$$innerDataHost, currently only supports two levels of synchronization
+    // If __$dataHost is already built
+    if (this.__$dataHost) {
+      // Recursively sync to __$dataHost, currently only supports two levels of synchronization
       Object.entries(data).forEach(([key, value]) => {
-        if (this.__$$innerDataHost[key] !== value) {
-          this.__$$innerDataHost[key] = value;
+        if (this.__$dataHost[key] !== value) {
+          this.__$dataHost[key] = value;
         }
       });
     }
@@ -761,6 +793,8 @@ export class VarSpace extends ObjectNode {
     if (data.writable !== undefined) {
       this.varDescriptor.writable = data.writable
     }
+
+    this.$buildHost()
 
     return new Proxy(this, PROXY_HANDLER) as VarSpace
   }
@@ -889,15 +923,15 @@ export class VarSpace extends ObjectNode {
     try {
       const proxyAssignmentSuccess = (parentNode[key] = finalValue);
 
-      // 5. Sync __$$innerDataHost only if proxy assignment also succeeded
-      if (proxyAssignmentSuccess && this.__$$innerDataHost) {
+      // 5. Sync __$dataHost only if proxy assignment also succeeded
+      if (proxyAssignmentSuccess && this.__$dataHost) {
         action(() => {
-          let currentDataRef = this.__$$innerDataHost;
-          // Use relative pathSegments for __$$innerDataHost sync
+          let currentDataRef = this.__$dataHost;
+          // Use relative pathSegments for __$dataHost sync
           for (let i = 0; i < pathSegments.length - 1; i++) { 
             const segment = pathSegments[i];
             if (currentDataRef[segment] === undefined || currentDataRef[segment] === null) {
-              console.warn(`setValueByPath: __$$innerDataHost sync issue, intermediate path ${segment} not found.`);
+              console.warn(`setValueByPath: __$dataHost sync issue, intermediate path ${segment} not found.`);
               return;
             }
             currentDataRef = currentDataRef[segment];
@@ -911,7 +945,7 @@ export class VarSpace extends ObjectNode {
       }
 
     } catch (error) {
-      console.error(`setValueByPath: Error during proxy assignment for path "${path}":`, error);
+      console.error(`setValueByPath: Error during assignment for path "${path}":`, error);
     }
   }
 
@@ -940,10 +974,10 @@ export class VarSpace extends ObjectNode {
    */
   getSymbolData(): Record<string, any> {
     const rst = {
-      [this.key]: this.__$$innerDataHost
+      [this.key]: this.__$dataHost
     };
     if (this.alias) {
-      rst[this.alias] = this.__$$innerDataHost
+      rst[this.alias] = this.__$dataHost
     }
     return rst;
   }
