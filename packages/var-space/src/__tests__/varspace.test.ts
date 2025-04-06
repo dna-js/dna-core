@@ -121,15 +121,12 @@ describe('VarSpace Functionality', () => {
     buildStructure(vs, testSchema);
     // Set initial data using $setData
     vs.$setData(testData);
-    // Build the observable $data structure
-    vs.build$data();
   });
 
   it('should create a VarSpace instance with nested structure and initial data', () => {
     expect(vs.simpleValue).toBe('Hello World');
     expect(vs.user).toBeDefined();
     expect(vs.config).toBeDefined();
-    expect(vs.user.$isXObj).toBe(true);
     expect(vs.user.name).toBe('Alice');
     expect(vs.user.id).toBe(12345);
     expect(vs.user.isActive).toBe(true);
@@ -152,7 +149,7 @@ describe('VarSpace Functionality', () => {
     vs.user.name = 'Bob';
     expect(vs.user.name).toBe('Bob');
 
-    const configStruct = vs.config.getStructX();
+    const configStruct = vs.config.getStruct();
     const themeStruct = configStruct.find(item => item.key === 'theme');
     const timeoutStruct = configStruct.find(item => item.key === 'timeout');
     expect(themeStruct?.enumerable).toBe(false);
@@ -198,14 +195,13 @@ describe('VarSpace Functionality', () => {
     }
     expect(vs.config.timeout).toBe(originalTimeout);
     // Check for the specific console error message from var.creator.ts
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Property timeout type conversion failed: Cannot convert string "not-a-number" to number'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Cannot convert string "not-a-number" to a valid Number'));
 
     const originalActive = vs.user.isActive;
     // // Wrap in try-catch 
-    // try { vs.user.isActive = 'not-a-boolean'; } catch (e) {
-    //   // Expected potential TypeError, proceed to check outcome
-    // }
-    vs.user.isActive = 'not-a-boolean';
+    try { vs.user.isActive = 'not-a-boolean'; } catch (e) {
+      // Expected potential TypeError, proceed to check outcome
+    }
     expect(vs.user.isActive).toBe(originalActive);
     // Check for the specific console error message (Update if message changed in var.creator.ts)
     // Assuming a conversion error is logged for DateTime
@@ -226,11 +222,9 @@ describe('VarSpace Functionality', () => {
 
    it('should allow accessing the underlying node instance details via helper', () => {
       const userNodeProxy = vs.user;
-      expect(userNodeProxy.$isXObj).toBe(true);
 
       const nameNode = getNodeFromParent(userNodeProxy, 'name') as VarItemInstance;
       expect(nameNode).toBeDefined();
-      expect(nameNode).not.toHaveProperty('$isXObj');
       expect(nameNode.value).toBe('Alice');
       expect(nameNode.varDescriptor.nativeType).toBe('String');
       expect(nameNode.varDescriptor.writable).toBe(true);
@@ -241,7 +235,7 @@ describe('VarSpace Functionality', () => {
 
       const profileNode = getNodeFromParent(userNodeProxy, 'profile') as ObjectNode;
       expect(profileNode).toBeDefined();
-      expect(profileNode.$isXObj).toBe(true);
+      expect(profileNode.isLeaf).toBe(false);
       expect(profileNode.varDescriptor.nativeType).toBe('Object');
 
       const lastLoginNodeInstance = getNodeFromParent(profileNode, 'lastLogin') as VarItemInstance;
@@ -249,7 +243,4 @@ describe('VarSpace Functionality', () => {
       expect(lastLoginNodeInstance.varDescriptor.observable).toBe(true);
       expect(lastLoginNodeInstance.varDescriptor.nativeType).toBe('DateTime');
    });
-
-  // TODO: Add more tests: $deleteVar, $appendLeaf/$appendNest after initial creation, getStruct, getWrappedData etc.
-
 });

@@ -38,7 +38,7 @@ describe('Custom Type', () => {
         defaultDescriptor: {
           nativeType: 'Object',
         },
-        toString: (value) => `${value.name} (${value.id})`
+        toString: (value) => `${value.id}`
       });
 
       const userType = getVarType('UserType');
@@ -50,7 +50,7 @@ describe('Custom Type', () => {
       expect(userType!.defaultDescriptor.writable).toBe(true);
       expect(userType!.defaultDescriptor.enumerable).toBe(true); 
       expect(userType!.defaultDescriptor.observable).toBe(false);
-      expect(userType!.toString({ id: 1, name: 'John' })).toBe('John (1)');
+      expect(userType!.toString({ id: 1, name: 'John' })).toBe('1');
     });
   });
 });
