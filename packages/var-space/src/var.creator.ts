@@ -289,6 +289,7 @@ export type IVarStruct = {
 
   children?: IVarStruct[];
   isLeaf?: boolean;
+  [key: string]: any;
 }
 
 // ==============================Above is the underlying capability of variables===================================
@@ -389,10 +390,12 @@ export class ObjectNode {
    * - which can not hold child
    * @param key Key name
    * @param options Variable descriptor (must contain 'type' or 'value' must be provided)
+   * @param extraInfo Optional object to merge into the instance info.
    * @returns [VarItemInstance, update, dispose], returns the registered leaf variable, update method, and dispose method
    */
   $appendLeaf(
-    key: string, options: IVarMetaProps
+    key: string, options: IVarMetaProps,
+    extraInfo?: Record<string, any>
   ): [VarItemInstance, /** update */(newValue: any) => boolean, /** dispose */() => void] {
 
     const { value, label, ...__descriptor } = options;
@@ -455,7 +458,7 @@ export class ObjectNode {
     // Create VarItemInstance (leaf node)
     const xVar: VarItemInstance = { value: finalValue, varDescriptor: finalDesc };
 
-    this.$varNodes.set(key, [xVar, { label: label || key, isLeaf: true }]);
+    this.$varNodes.set(key, [xVar, { label: label || key, isLeaf: true, ...extraInfo }]);
 
     // === Set hidden object for the new leaf node ===
     const _hidden_obj_ = get_hidden_object(this);
@@ -489,10 +492,12 @@ export class ObjectNode {
    * - which can hold child variables
    * @param key Key name
    * @param options Configuration options including label and descriptor properties.
+   * @param extraInfo Optional object to merge into the instance info.
    * @returns [ObjectNode, update, dispose], returns the registered object variable, update method, and dispose method
    */
   $appendNest(
-    key: string, options: IVarMetaProps
+    key: string, options: IVarMetaProps,
+    extraInfo?: Record<string, any>
   ): [ObjectNode, /** update */(newData: object) => boolean, /** dispose */() => void] {
     // Check for duplicate registration
     if (this.$varNodes.has(key)) {
@@ -544,7 +549,8 @@ export class ObjectNode {
     // Create InstanceInfo
     const xInfo: InstanceInfo = {
       label: label || key,
-      isLeaf: false
+      isLeaf: false,
+      ...extraInfo // Merge extraInfo here
     };
 
     // Add to map
@@ -640,14 +646,20 @@ export class ObjectNode {
 
     this.$varNodes.forEach((node, key) => {
       const varObject = node[0];
+      const instanceInfo = node[1]; // Get the InstanceInfo
+
+      // Destructure known properties from InstanceInfo
+      const { label, isLeaf, ...extraInfo } = instanceInfo;
+
       // Create basic structure
       const _struct: IVarStruct = {
+        ...extraInfo,
         key,
-        label: node[1].label || key,
+        label: label || key, // Use label from InstanceInfo or key as fallback
         type: varObject.varDescriptor.nativeType,
         writable: varObject.varDescriptor.writable !== false,
         enumerable: varObject.varDescriptor.enumerable !== false,
-        isLeaf: varObject instanceof ObjectNode ? false : true
+        isLeaf: varObject instanceof ObjectNode ? false : true, // Derive isLeaf based on object type
       };
 
       // If it's an object node, recursively get the child structure
