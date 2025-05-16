@@ -1,6 +1,6 @@
 {
   "name": "var-space",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
@@ -17,6 +17,7 @@
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts,.tsx",
     "pub": "npm publish --access=public --registry https://registry.npmjs.org/",
+    "sync": "cnpm sync var-space | open https://npmmirror.com/sync/var-space",
     "prepare": "husky install"
   },
   "devDependencies": {

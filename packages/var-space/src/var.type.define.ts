@@ -218,11 +218,11 @@ VarTypeBoolean.configRule('String', (value: string) => {
   return { success: false, error: `Cannot convert string "${value}" to Boolean (expects 'true' or 'false')` };
 });
 
-
+const T1989 = (new Date("1899-01-01T00:00:00")).getTime()
 // These date/time types currently have nativeType: 'Number' specified in their descriptors.
 // If we omit the descriptor, they would default to nativeType: 'Object' based on the logic above.
 // So, we should keep specifying their descriptors explicitly if we want nativeType: 'Number'.
-const VarTypeDateTime = defineVarType<number | null >('DateTime', { defaultValue: null, defaultLabel: 'DateTime', defaultDescriptor: { nativeType: 'Number' } })
+const VarTypeDateTime = defineVarType<number | null >('DateTime', { defaultValue: T1989, defaultLabel: 'DateTime', defaultDescriptor: { nativeType: 'Number' } })
 // DateTime <- String (Stricter checks from def.conversion.rule.ts Date logic)
 VarTypeDateTime.configRule('String', (value: string) => {
   const strValue = String(value).trim();
@@ -250,7 +250,7 @@ VarTypeDateTime.configRule('Date', (value: Date) => {
 });
 
 
-const VarTypeTime = defineVarType<number | null>('Time', { defaultValue: null, defaultLabel: 'Time', defaultDescriptor: { nativeType: 'Number' } })
+const VarTypeTime = defineVarType<number | null>('Time', { defaultValue: T1989, defaultLabel: 'Time', defaultDescriptor: { nativeType: 'Number' } })
 // Add rules similar to DateTime, returning timestamp
 VarTypeTime.configRule('String', (value: string) => {
   const strValue = String(value).trim();
@@ -276,7 +276,7 @@ VarTypeTime.configRule('Date', (value: Date) => {
   return { success: true, convertedValue: value.getTime() }; // Return timestamp
 });
 
-const VarTypeDate = defineVarType<number | null>('Date', { defaultValue: null, defaultLabel: 'Date', defaultDescriptor: { nativeType: 'Number' } })
+const VarTypeDate = defineVarType<number | null>('Date', { defaultValue: T1989, defaultLabel: 'Date', defaultDescriptor: { nativeType: 'Number' } })
 // Add rules similar to DateTime, returning timestamp
 VarTypeDate.configRule('String', (value: string) => {
   const strValue = String(value).trim();
