@@ -866,6 +866,7 @@ export class VarSpace extends ObjectNode {
    * - Setting on var space synchronizes to __$dataHost.
    * @param data The data object to set.
    */
+  @action
   $setData(data: object): void {
     super.$setData(data)
     // If __$dataHost is already built
