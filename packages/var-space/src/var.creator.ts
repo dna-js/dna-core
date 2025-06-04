@@ -15,7 +15,7 @@ import {
   isPlainObject
 } from "./var.type.define";
 
-import { observable, action, intercept, isObservableObject, extendObservable } from "mobx";
+import { observable, action, isObservableObject, extendObservable } from "mobx";
 
 import { set_hidden_object, get_hidden_object, delete_hidden_object } from "./help"
 
@@ -40,15 +40,17 @@ function createDescriptor(type: NativeType): VarDescriptor {
  * @param targetNode The node being assigned to.
  * @param value The incoming value.
  * @param key The key/path segment for logging.
+ * @param bypassWritableCheck If true, bypasses the writable check.
  * @returns Result object indicating success, the final value, and any error.
  */
 function validateAndConvertValue(
   targetNode: VarItemInstance | ObjectNode,
   value: any,
-  key: string
+  key: string,
+  bypassWritableCheck: boolean = false
 ): { success: boolean; finalValue?: any; error?: string } {
   // 1. Check writable
-  if (targetNode.varDescriptor.writable === false) {
+  if (!bypassWritableCheck && targetNode.varDescriptor.writable === false) {
     const error = `Property ${key} is not writable`;
     console.warn(error);
     return { success: false, error };
@@ -345,9 +347,8 @@ export class ObjectNode {
   [key: string]: any;
 
   /**
-   * Bulk sets data, updating corresponding $varNodes.
-   * - If a corresponding $varNode is not found, the value is set in $backgroundData.
-   * - This method bypasses the 'writable' restriction and can force updates on read-only variables.
+   * Bulk silently sets data under conversion rules
+   * - skip undefined value
    * @param data The data object to set.
    */
   public $setData(data: object): void {
@@ -359,6 +360,10 @@ export class ObjectNode {
     const that = this;
 
     Object.entries(data).forEach(([key, value]) => {
+      // skip undefined value
+      if (value === undefined) {
+        return;
+      }
       const node = that.getChildNode(key);
 
       if (node) {
@@ -371,9 +376,18 @@ export class ObjectNode {
             console.warn(`Property ${key} is of type object, but the provided value is not an object`);
           }
         } else {
-          // Leaf node, set value directly, ignoring writable restriction
-          if (node.value !== value) {
-            node.value = value;
+          // Leaf node, apply conversion rules, bypassing writability check.
+          const validationResult = validateAndConvertValue(node, value, key, true); // bypassWritableCheck = true
+
+          if (validationResult.success) {
+            // Set value if it has actually changed
+            if (node.value !== validationResult.finalValue) {
+              node.value = validationResult.finalValue;
+            }
+          } else {
+            // Error is usually logged by validateAndConvertValue itself.
+            // Adding a specific warning for $setData context.
+            console.warn(`[$setData] Value for property '${key}' could not be set due to validation/conversion failure: ${validationResult.error}`);
           }
         }
       } else {
@@ -504,9 +518,6 @@ export class ObjectNode {
       console.warn(`Variable ${key} is already registered`);
       const existingNode = this.getChildNode(key);
       if (existingNode instanceof ObjectNode) {
-        // Return existing object node
-        // Get hidden object info for existing node
-        const existingHidden = get_hidden_object(existingNode);
         const updateFn = (newData: object): boolean => {
           try {
             this[key] = newData;

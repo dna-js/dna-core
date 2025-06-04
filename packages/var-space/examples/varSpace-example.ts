@@ -65,7 +65,8 @@ function createAndRenderVarSpace(isObservable: boolean) {
     myVarSpace.$setData({
         pageTitle: 'VarSpace Demo Page',
         userSettings: {
-            theme: 'dark'
+            theme: 'dark',
+            notificationsEnabled: "0"
         },
         apiEndpoint: '/api/v1/data'
     });

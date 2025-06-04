@@ -215,6 +215,8 @@ VarTypeBoolean.configRule('String', (value: string) => {
   const lower = String(value).trim().toLowerCase();
   if (lower === 'true') return { success: true, convertedValue: true };
   if (lower === 'false') return { success: true, convertedValue: false };
+  if (lower === '1') return { success: true, convertedValue: true };
+  if (lower === '0') return { success: true, convertedValue: false };
   return { success: false, error: `Cannot convert string "${value}" to Boolean (expects 'true' or 'false')` };
 });
 
