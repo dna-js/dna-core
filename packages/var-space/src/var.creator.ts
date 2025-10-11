@@ -376,7 +376,7 @@ export class ObjectNode {
             console.warn(`Property ${key} is of type object, but the provided value is not an object`);
           }
         } else {
-          // Leaf node, apply conversion rules, bypassing writability check.
+          // Leaf node, apply conversion rules, bypassing write ability check.
           const validationResult = validateAndConvertValue(node, value, key, true); // bypassWritableCheck = true
 
           if (validationResult.success) {

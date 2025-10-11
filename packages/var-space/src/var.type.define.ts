@@ -319,6 +319,8 @@ function isPlainObject(obj: any): boolean {
  */
 function inferVarType(val: any): NativeType {
   if (val === undefined) return 'Unknown'
+  if (val === null) return 'Unknown'
+    
   const type = typeof val
   
   switch (type) {
