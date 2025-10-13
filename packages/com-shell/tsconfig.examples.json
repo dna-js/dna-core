@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // No outDir, declaration, declarationDir, or rootDir needed for examples build via webpack
+    "strictPropertyInitialization": false
+  },
+  "include": [
+    "src/**/*.ts", // Keep src included for imports within examples
+    "examples/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts"
+  ]
+}

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>com-shell Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 10px;
+      border-radius: 3px;
+      overflow-x: auto;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      background: #e3f2fd;
+      border-radius: 3px;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+    .modal-content {
+      background-color: #fefefe;
+      margin: 10% auto;
+      padding: 30px;
+      border: 1px solid #888;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .modal-content h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #555;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #2196F3;
+    }
+    .form-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 25px;
+    }
+    .btn-primary {
+      flex: 1;
+      padding: 12px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .btn-primary:hover {
+      background-color: #1976D2;
+    }
+    .btn-secondary {
+      flex: 1;
+      padding: 12px;
+      background-color: #f5f5f5;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .btn-secondary:hover {
+      background-color: #e0e0e0;
+    }
+  </style>
+</head>
+<body>
+  <h1>com-shell Demo</h1>
+  
+  <div class="section">
+    <h2>Global Instance Check</h2>
+    <p>Check browser console to see: <code>window.$PageModelDB</code></p>
+    <button onclick="checkGlobalInstance()">Check Global Instance</button>
+    <div id="global-status" class="status"></div>
+  </div>
+
+  <div class="section">
+    <h2>Enable/Disable Debug Mode</h2>
+    <button onclick="enableDebug()">Enable Debug</button>
+    <button onclick="disableDebug()">Disable Debug</button>
+    <button onclick="checkStatus()">Check Status</button>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="section">
+    <h2>Logging Control</h2>
+    <button onclick="enableLogging()">Enable Logging</button>
+    <button onclick="disableLogging()">Disable Logging</button>
+    <button onclick="checkLogStatus()">Check Log Status</button>
+    <div id="log-status" class="status"></div>
+  </div>
+
+  <div class="section">
+    <h2>Layout Operations</h2>
+    <button onclick="createLayout()">Create Layout</button>
+    <button onclick="getLayout()">Get Layout</button>
+    <button onclick="getAllLayouts()">Get All Layouts</button>
+    <button onclick="clearAll()">Clear All</button>
+    <div id="layout-status" class="status"></div>
+  </div>
+
+  <!-- Create Layout Modal -->
+  <div id="createModal" class="modal">
+    <div class="modal-content">
+      <h2>Create Layout</h2>
+      <form id="createLayoutForm">
+        <div class="form-group">
+          <label for="pageEngine">Page Engine:</label>
+          <input type="text" id="pageEngine" name="pageEngine" required placeholder="e.g., testEngine">
+        </div>
+        <div class="form-group">
+          <label for="pageKey">Page Key:</label>
+          <input type="text" id="pageKey" name="pageKey" required placeholder="e.g., testPage">
+        </div>
+        <div class="form-group">
+          <label for="layoutApiKey">Layout API Key:</label>
+          <input type="text" id="layoutApiKey" name="layoutApiKey" required placeholder="e.g., testLayout">
+        </div>
+        <div class="form-buttons">
+          <button type="submit" class="btn-primary">Create</button>
+          <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Get Layout Modal -->
+  <div id="getModal" class="modal">
+    <div class="modal-content">
+      <h2>Get Layout</h2>
+      <form id="getLayoutForm">
+        <div class="form-group">
+          <label for="getPageEngine">Page Engine:</label>
+          <input type="text" id="getPageEngine" name="pageEngine" required placeholder="e.g., testEngine">
+        </div>
+        <div class="form-group">
+          <label for="getPageKey">Page Key:</label>
+          <input type="text" id="getPageKey" name="pageKey" required placeholder="e.g., testPage">
+        </div>
+        <div class="form-group">
+          <label for="getLayoutApiKey">Layout API Key:</label>
+          <input type="text" id="getLayoutApiKey" name="layoutApiKey" required placeholder="e.g., testLayout">
+        </div>
+        <div class="form-buttons">
+          <button type="submit" class="btn-primary">Get</button>
+          <button type="button" class="btn-secondary" onclick="closeGetModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="./index.ts"></script>
+</body>
+</html>

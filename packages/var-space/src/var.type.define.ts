@@ -176,11 +176,12 @@ function defineVarType<T>(
   return varType;
 }
 
-// basic type define - Now defaultDescriptor is optional here if we want
+//1. Object
 const VarTypeObject = defineVarType<object>('Object', { defaultValue: {}});
 // Object <- Object
 VarTypeObject.configRule('Object', (value: object) => ({ success: true, convertedValue: value }));
 
+//2. String
 const VarTypeString = defineVarType<string>('String', { defaultValue: ''});
 // String <- Number
 VarTypeString.configRule('Number', (value: number) => ({ success: true, convertedValue: String(value) }));
@@ -189,6 +190,7 @@ VarTypeString.configRule('Boolean', (value: boolean) => ({ success: true, conver
 // String <- Date (Using toISOString as per def.conversion.rule.ts)
 VarTypeString.configRule('Date', (value: Date) => ({ success: true, convertedValue: value.toISOString() }));
 
+//3. Number
 const VarTypeNumber = defineVarType<number>('Number', { defaultValue: 0});
 // Number <- String (Stricter checks from def.conversion.rule.ts)
 VarTypeNumber.configRule('String', (value: string) => {
@@ -207,6 +209,7 @@ VarTypeNumber.configRule('Boolean', (value: boolean) => ({ success: true, conver
 // Number <- Date
 VarTypeNumber.configRule('Date', (value: Date) => ({ success: true, convertedValue: value.getTime() }));
 
+//4. Boolean
 const VarTypeBoolean = defineVarType<boolean>('Boolean', { defaultValue: false});
 // Boolean <- Number
 VarTypeBoolean.configRule('Number', (value: number) => ({ success: true, convertedValue: value !== 0 }));
@@ -220,6 +223,7 @@ VarTypeBoolean.configRule('String', (value: string) => {
   return { success: false, error: `Cannot convert string "${value}" to Boolean (expects 'true' or 'false')` };
 });
 
+//5. DateTime
 const T1989 = (new Date("1899-01-01T00:00:00")).getTime()
 // These date/time types currently have nativeType: 'Number' specified in their descriptors.
 // If we omit the descriptor, they would default to nativeType: 'Object' based on the logic above.
@@ -252,6 +256,7 @@ VarTypeDateTime.configRule('Date', (value: Date) => {
 });
 
 
+//6. Time
 const VarTypeTime = defineVarType<number | null>('Time', { defaultValue: T1989, defaultLabel: 'Time', defaultDescriptor: { nativeType: 'Number' } })
 // Add rules similar to DateTime, returning timestamp
 VarTypeTime.configRule('String', (value: string) => {
@@ -278,6 +283,7 @@ VarTypeTime.configRule('Date', (value: Date) => {
   return { success: true, convertedValue: value.getTime() }; // Return timestamp
 });
 
+//7. Date
 const VarTypeDate = defineVarType<number | null>('Date', { defaultValue: T1989, defaultLabel: 'Date', defaultDescriptor: { nativeType: 'Number' } })
 // Add rules similar to DateTime, returning timestamp
 VarTypeDate.configRule('String', (value: string) => {
@@ -306,6 +312,7 @@ VarTypeDate.configRule('DateTime', (value: number) => {
   return { success: true, convertedValue: value };
 });
 
+//9. isPlainObject
 function isPlainObject(obj: any): boolean {
   return Object.prototype.toString.call(obj) === '[object Object]'
 }
