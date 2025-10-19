@@ -2,9 +2,10 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
+  entry: {
+    index: './examples/index.ts'
+  },
   mode: 'development',
-  entry: './examples/index.ts',
-  devtool: 'inline-source-map',
   module: {
     rules: [
       {
@@ -17,34 +18,28 @@ module.exports = {
         },
         exclude: /node_modules/,
       },
-      {
-        test: /\.css$/,
-        use: ['style-loader', 'css-loader'],
-      },
     ],
   },
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
   },
   output: {
-    filename: 'bundle.js',
-    path: path.resolve(__dirname, 'dist/examples'),
-    clean: true,
+    filename: '[name].bundle.js',
+    path: path.resolve(__dirname, 'dist'),
   },
   plugins: [
     new HtmlWebpackPlugin({
-      template: './examples/index.html',
-      inject: 'body',
-    }),
+      template: 'examples/index.html',
+      filename: 'index.html',
+      chunks: ['index']
+    })
   ],
   devServer: {
     static: {
-      directory: path.join(__dirname, 'dist/examples'),
+      directory: path.join(__dirname, 'dist'),
     },
     compress: true,
-    port: 9000,
-    hot: true,
-    open: true,
+    port: 9002,
+    historyApiFallback: true
   },
 };
-

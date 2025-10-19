@@ -1,5 +1,5 @@
 {
-  "name": "fetch-record",
+  "name": "com-fx",
   "version": "0.1.0",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -17,27 +17,23 @@
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts,.tsx",
     "pub": "npm publish --access=public --registry https://registry.npmjs.org/",
-    "sync": "cnpm sync fetch-record | open https://npmmirror.com/sync/fetch-record"
+    "sync": "cnpm sync com-fx | open https://npmmirror.com/sync/com-fx",
+    "prepare": "husky install"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/jest": "^29.5.12",
-    "css-loader": "^6.10.0",
     "esbuild": "^0.20.1",
     "html-webpack-plugin": "^5.6.3",
+    "husky": "^9.0.11",
     "jest": "^29.7.0",
     "rollup": "^4.12.0",
     "rollup-plugin-esbuild": "^6.1.0",
-    "style-loader": "^3.3.4",
     "ts-jest": "^29.1.2",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
     "webpack": "^5.90.3",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.0.2"
-  },
-  "dependencies": {
-    "idb": "^8.0.0"
   }
 }
-

@@ -18,7 +18,7 @@ interface FetchRecordDB extends DBSchema {
 export class DBManager implements IDBManager {
   private db: IDBPDatabase<FetchRecordDB> | null = null;
   private dbName: string;
-  private storeName: string = 'records';
+  private readonly storeName = 'records' as const;
   private version: number = 1;
 
   constructor(dbName: string = 'FetchRecordDB') {

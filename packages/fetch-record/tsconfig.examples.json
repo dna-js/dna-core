@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist/examples",
+    "rootDir": ".",
+    "strictPropertyInitialization": false,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*", "examples/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
+

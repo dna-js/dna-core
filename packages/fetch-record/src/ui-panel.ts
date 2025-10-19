@@ -547,7 +547,7 @@ export class UIPanel {
       const oldPanel = this.panelElement;
       this.panelElement = null;
       this.createPanel();
-      if (oldPanel.parentNode) {
+      if (oldPanel.parentNode && this.panelElement) {
         oldPanel.parentNode.replaceChild(this.panelElement, oldPanel);
       }
     }
@@ -648,16 +648,25 @@ export class UIPanel {
         gap: 8px;
         cursor: pointer;
         user-select: none;
+        color: #333;
+        font-size: 14px;
       }
       
       .fr-toggle input[type="checkbox"] {
         cursor: pointer;
+        width: 16px;
+        height: 16px;
+      }
+      
+      .fr-toggle span {
+        color: #333;
       }
       
       .fr-btn {
         padding: 8px 16px;
         border: 1px solid #ddd;
         background: #fff;
+        color: #333;
         border-radius: 4px;
         cursor: pointer;
         font-size: 14px;
@@ -667,15 +676,17 @@ export class UIPanel {
       .fr-btn:hover {
         background: #f5f5f5;
         border-color: #999;
+        color: #000;
       }
       
       .fr-btn-danger {
-        color: #d32f2f;
+        color: #d32f2f !important;
         border-color: #d32f2f;
       }
       
       .fr-btn-danger:hover {
         background: #ffebee;
+        color: #c62828 !important;
       }
       
       .fr-btn-small {
@@ -683,6 +694,7 @@ export class UIPanel {
         font-size: 12px;
         border: 1px solid #ddd;
         background: #fff;
+        color: #333;
         border-radius: 4px;
         cursor: pointer;
         transition: all 0.2s;
@@ -691,6 +703,11 @@ export class UIPanel {
       .fr-btn-small:hover {
         background: #f5f5f5;
         border-color: #999;
+        color: #000;
+      }
+      
+      .fr-btn-small.fr-btn-danger {
+        color: #d32f2f !important;
       }
       
       .fr-table-container {
@@ -806,6 +823,8 @@ export class UIPanel {
         font-size: 12px;
         line-height: 1.5;
         margin: 0 0 16px 0;
+        color: #333;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
       }
       
       .fr-form-group {
@@ -825,7 +844,14 @@ export class UIPanel {
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 14px;
+        color: #333;
+        background: #fff;
         box-sizing: border-box;
+      }
+      
+      .fr-input:focus {
+        outline: none;
+        border-color: #2196F3;
       }
       
       .fr-textarea {
@@ -834,9 +860,16 @@ export class UIPanel {
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 12px;
+        color: #333;
+        background: #fff;
         font-family: monospace;
         box-sizing: border-box;
         resize: vertical;
+      }
+      
+      .fr-textarea:focus {
+        outline: none;
+        border-color: #2196F3;
       }
       
       .fr-hint {
